@@ -1,0 +1,105 @@
+# =============================================================================
+# ASSETS TIERS (Asset Store, packages achetés, gros assets externes)
+# Réimporter depuis la source originale après clone.
+# =============================================================================
+Assets/3rdParty/
+Assets/3rdParty.meta
+
+# Garder le dossier placeholder tracké
+!Assets/3rdParty/.gitkeep
+
+
+# =============================================================================
+# UNITY - FICHIERS GÉNÉRÉS (jamais committer, régénérés à l'ouverture)
+# =============================================================================
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# Asset pipeline v2 cache
+[Aa]sset[Ss]tore-5.x/
+
+# Crash dumps et profiler
+sysinfo.txt
+*.stackdump
+*.crashlytics
+
+
+# =============================================================================
+# UNITY - PARAMÈTRES LOCAUX (propres à chaque poste de développement)
+# =============================================================================
+[Uu]ser[Ss]ettings/
+
+# Fichiers .meta orphelins générés par Unity (déjà couverts par les dossiers ci-dessus)
+# Note : les .meta des Assets/_MainProject sont GARDÉS — ils sont essentiels aux GUIDs Unity
+
+
+# =============================================================================
+# IDE - VISUAL STUDIO
+# =============================================================================
+.vs/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.opendb
+*.VC.db
+
+
+# =============================================================================
+# IDE - JETBRAINS RIDER
+# =============================================================================
+.idea/
+*.sln.iml
+
+
+# =============================================================================
+# IDE - VISUAL STUDIO CODE
+# =============================================================================
+.vscode/
+
+
+# =============================================================================
+# SYSTÈME D'EXPLOITATION
+# =============================================================================
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+
+
+# =============================================================================
+# BUILDS & DÉPLOIEMENT
+# =============================================================================
+ExportedObj/
+*.apk
+*.aab
+*.unitypackage
+*.app
