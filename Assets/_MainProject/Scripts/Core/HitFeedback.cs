@@ -3,23 +3,18 @@ using System.Collections;
 
 /// <summary>
 /// Feedback visuel quand l'entité prend des dégâts.
-/// Flash blanc + léger scale punch.
-/// 
-/// SETUP:
-///   1. Ajouter sur le même GameObject que HealthSystem
-///   2. Assigner le Renderer du modèle 3D (MeshRenderer ou SkinnedMeshRenderer)
-///   3. Le matériau DOIT utiliser un shader qui supporte "_Color" ou "_BaseColor"
+/// Flash lissé (lerp) + scale punch + chiffre de dégât flottant.
+/// Utilise unscaledDeltaTime pour fonctionner correctement pendant le hit stop.
 /// </summary>
 public class HitFeedback : MonoBehaviour
 {
     [Header("Flash")]
     [SerializeField] private Renderer modelRenderer;
     [SerializeField] private Color flashColor = Color.white;
-    [SerializeField] private float flashDuration = 0.1f;
+    [SerializeField] private float flashDuration = 0.2f;
 
     [Header("Scale Punch")]
     [SerializeField] private float punchScale = 1.2f;
-    [SerializeField] private float punchDuration = 0.1f;
 
     [Header("Death")]
     [SerializeField] private Color deathColor = new Color(0.3f, 0.3f, 0.3f, 1f);
@@ -38,14 +33,12 @@ public class HitFeedback : MonoBehaviour
         health = GetComponent<HealthSystem>();
         propBlock = new MaterialPropertyBlock();
 
-        // Trouver le renderer automatiquement si non assigné
         if (modelRenderer == null)
             modelRenderer = GetComponentInChildren<Renderer>();
 
         if (modelRenderer != null)
         {
             modelRenderer.GetPropertyBlock(propBlock);
-            // Essayer les deux noms de propriété de couleur
             originalColor = modelRenderer.sharedMaterial.HasProperty(ColorID)
                 ? modelRenderer.sharedMaterial.GetColor(ColorID)
                 : modelRenderer.sharedMaterial.GetColor(ColorIDLegacy);
@@ -76,34 +69,56 @@ public class HitFeedback : MonoBehaviour
     {
         if (flashCoroutine != null)
             StopCoroutine(flashCoroutine);
-
         flashCoroutine = StartCoroutine(FlashAndPunch());
+
+        DamageNumber.Spawn(transform.position + Vector3.up * 1.2f, damage);
     }
 
     private IEnumerator FlashAndPunch()
     {
-        // Flash blanc
-        SetColor(flashColor);
-        transform.localScale = originalScale * punchScale;
+        Vector3 punchScaleVec = originalScale * punchScale;
 
-        yield return new WaitForSeconds(flashDuration);
+        // --- Flash in + scale punch (rapide : 25% de la durée) ---
+        float flashInTime = flashDuration * 0.25f;
+        float elapsed = 0f;
+        while (elapsed < flashInTime)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = elapsed / flashInTime;
+            SetColor(Color.Lerp(originalColor, flashColor, t));
+            transform.localScale = Vector3.Lerp(originalScale, punchScaleVec, t);
+            yield return null;
+        }
 
-        // Retour à la normale
+        // --- Flash out + retour à l'échelle (75% de la durée) ---
+        float flashOutTime = flashDuration * 0.75f;
+        elapsed = 0f;
+        while (elapsed < flashOutTime)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = elapsed / flashOutTime;
+            SetColor(Color.Lerp(flashColor, originalColor, t));
+            transform.localScale = Vector3.Lerp(punchScaleVec, originalScale, t);
+            yield return null;
+        }
+
         SetColor(originalColor);
         transform.localScale = originalScale;
+        flashCoroutine = null;
     }
 
     private void OnDeath()
     {
+        if (flashCoroutine != null)
+            StopCoroutine(flashCoroutine);
         StartCoroutine(DeathFeedback());
     }
 
     private IEnumerator DeathFeedback()
     {
-        // Devenir gris et rétrécir
         SetColor(deathColor);
 
-        float elapsed = 0;
+        float elapsed = 0f;
         while (elapsed < deathShrinkDuration)
         {
             elapsed += Time.deltaTime;
@@ -118,20 +133,15 @@ public class HitFeedback : MonoBehaviour
     private void SetColor(Color color)
     {
         if (modelRenderer == null) return;
-
         propBlock.SetColor(ColorID, color);
         propBlock.SetColor(ColorIDLegacy, color);
         modelRenderer.SetPropertyBlock(propBlock);
     }
 
-    /// <summary>
-    /// Reset le feedback (pour respawn).
-    /// </summary>
     public void ResetFeedback()
     {
         if (flashCoroutine != null)
             StopCoroutine(flashCoroutine);
-
         SetColor(originalColor);
         transform.localScale = originalScale;
     }
