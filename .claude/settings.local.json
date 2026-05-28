@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(Get-ChildItem -Path \"E:\\\\PortfolioProject\\\\ARPGProject\" -Directory)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "mcp__coplay-mcp__save_scene"
     ]
   }
 }

@@ -21,7 +21,7 @@ public class PlayerController : MonoBehaviour
 {
     [Header("Mouvement")]
     [SerializeField] private float moveSpeed = 8f;
-    [SerializeField] private float rotationSpeed = 15f;
+    [SerializeField] private float rotationSpeed = 540f; // degrés par seconde
     [SerializeField] private float stickDeadzone = 0.1f;
 
     [Header("Click-to-Move")]
@@ -33,8 +33,10 @@ public class PlayerController : MonoBehaviour
 
     private NavMeshAgent agent;
     private HealthSystem health;
+    private Animator animator;
     private bool isUsingClickMove = false;
     private Vector3 clickMoveTarget;
+    private float currentSpeed = 0f;
 
     // Isometric direction conversion:
     // En vue iso, "haut" sur le stick doit correspondre à "haut-droite" dans le monde.
@@ -45,6 +47,7 @@ public class PlayerController : MonoBehaviour
     {
         agent = GetComponent<NavMeshAgent>();
         health = GetComponent<HealthSystem>();
+        animator = GetComponentInChildren<Animator>();
 
         // Config du NavMeshAgent
         agent.speed = moveSpeed;
@@ -74,6 +77,7 @@ public class PlayerController : MonoBehaviour
         if (health != null && health.IsDead) return;
 
         HandleMovement();
+        animator?.SetFloat("Speed", currentSpeed);
     }
 
     private void HandleMovement()
@@ -101,6 +105,9 @@ public class PlayerController : MonoBehaviour
             // Déplacer via NavMeshAgent (pour respecter le navmesh)
             agent.Move(isoDir * moveSpeed * Time.deltaTime);
 
+            // Vitesse réelle basée sur l'amplitude de l'input (WASD = magnitude 0→1)
+            currentSpeed = moveInput.magnitude * moveSpeed;
+
             // Rotation vers la direction de mouvement
             RotateTowards(isoDir);
         }
@@ -110,19 +117,23 @@ public class PlayerController : MonoBehaviour
             clickMoveTarget = input.MouseWorldPosition;
             agent.SetDestination(clickMoveTarget);
             isUsingClickMove = true;
-
-            // Afficher un indicateur de clic (optionnel)
             ShowClickIndicator(clickMoveTarget);
         }
 
-        // Rotation pendant le click-to-move
+        // Rotation et vitesse pendant le click-to-move
         if (isUsingClickMove && agent.hasPath && agent.remainingDistance > clickStoppingDistance)
         {
+            currentSpeed = agent.velocity.magnitude;
             RotateTowards(agent.velocity.normalized);
         }
         else if (isUsingClickMove && (!agent.hasPath || agent.remainingDistance <= clickStoppingDistance))
         {
             isUsingClickMove = false;
+            currentSpeed = 0f;
+        }
+        else if (!hasStickInput)
+        {
+            currentSpeed = 0f;
         }
     }
 
@@ -131,7 +142,7 @@ public class PlayerController : MonoBehaviour
         if (direction.sqrMagnitude < 0.01f) return;
 
         Quaternion targetRotation = Quaternion.LookRotation(direction, Vector3.up);
-        modelTransform.rotation = Quaternion.Slerp(
+        modelTransform.rotation = Quaternion.RotateTowards(
             modelTransform.rotation,
             targetRotation,
             rotationSpeed * Time.deltaTime

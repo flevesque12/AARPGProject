@@ -37,6 +37,7 @@ public class PlayerCombat : MonoBehaviour
 
     private PlayerController playerController;
     private HealthSystem healthSystem;
+    private Animator animator;
     private Transform modelTransform;
 
     private void Awake()
@@ -48,6 +49,7 @@ public class PlayerCombat : MonoBehaviour
     private void Start()
     {
         modelTransform = transform;
+        animator = GetComponentInChildren<Animator>();
     }
 
     private void OnDisable()
@@ -83,6 +85,7 @@ public class PlayerCombat : MonoBehaviour
         if (playerController != null)
             playerController.LockMovement(attackMoveLockDuration);
 
+        animator?.SetTrigger("Attack");
         StartCoroutine(AttackSequence());
     }
 

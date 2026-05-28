@@ -22,7 +22,7 @@ public class CameraController : MonoBehaviour
     [SerializeField] private Transform target; // Le joueur
 
     [Header("Position")]
-    [SerializeField] private Vector3 offset = new Vector3(0, 18, -18);
+    [SerializeField] private Vector3 offset = new Vector3(-7, 10, -7);
     [SerializeField] private float followSpeed = 8f;
 
     [Header("Rotation")]
@@ -33,7 +33,7 @@ public class CameraController : MonoBehaviour
     [SerializeField] private float zoomSpeed = 3f;
     [SerializeField] private float minZoom = 8f;
     [SerializeField] private float maxZoom = 25f;
-    [SerializeField] private float currentZoom = 15f;
+    [SerializeField] private float currentZoom = 8f;
 
     [Header("Configuration auto")]
     [SerializeField] private bool useOrthographic = true;

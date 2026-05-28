@@ -20,6 +20,9 @@ des écoles ouvertes.
 - Assets/_MainProject/Scripts/Skills/ — (à venir) SkillData, SkillCaster
 - Assets/_MainProject/Data/Skills/ — (à venir) ScriptableObject assets
 - Assets/_MainProject/Prefabs/ — Prefabs joueur, ennemis, effets
+- Assets/_MainProject/Models/ — HeroCharacter.glb (base), HeroCharacter_Rigged.glb (rigué)
+- Assets/_MainProject/Models/Animations/ — Hero_Idle.glb, Hero_Walk.glb, Hero_Attack.glb
+- Assets/_MainProject/Animations/ — HeroAnimator.controller
 
 ## Conventions de code
 - Nommage : PascalCase pour les classes et méthodes, camelCase pour les variables
@@ -28,6 +31,27 @@ des écoles ouvertes.
 - Événements C# (event Action) pour la communication entre systèmes
 
 ## Notes techniques importantes
+
+### Personnage joueur — Setup scène
+- `Player` : NavMeshAgent (`baseOffset = 1.0`), PlayerController, PlayerCombat, HealthSystem
+- `Player/HeroModel` : modèle Meshy riggué (`HeroCharacter_Rigged.glb`), Animator, SkinnedMeshRenderer
+  - `localPosition.y = -1.0` (compense le baseOffset du NavMeshAgent pour poser les pieds au sol)
+  - Ne pas remettre à zéro sans recalculer via `FixHeroModelHeight.cs`
+- Modèles dans `Assets/_MainProject/Models/` : HeroCharacter.glb (base), HeroCharacter_Rigged.glb (rigué)
+- Animations dans `Assets/_MainProject/Models/Animations/` : Hero_Idle.glb, Hero_Walk.glb, Hero_Attack.glb
+
+### Personnage joueur — Animations
+- `PlayerController` pilote le paramètre `Speed` (Float) avec un `currentSpeed` local :
+  - WASD : `currentSpeed = moveInput.magnitude * moveSpeed` (pas `agent.velocity` qui vaut 0 avec `agent.Move()`)
+  - Click-to-move : `currentSpeed = agent.velocity.magnitude`
+  - Idle : `currentSpeed = 0f`
+- `PlayerCombat` déclenche le trigger `Attack` au début de `PerformAttack()`
+- Les deux scripts récupèrent l'`Animator` via `GetComponentInChildren<Animator>()`
+- Rotation : `Quaternion.RotateTowards` à 540°/s (Inspector), pas `Slerp`
+- `HeroAnimator.controller` : états Idle (défaut) / Walk / Attack
+  - Idle ↔ Walk : conditionné par Speed > 0.1 / < 0.1, transition 0.15s
+  - AnyState → Attack : trigger Attack, pas d'exit time, transition 0.05s
+  - Attack → Idle : exit time à 85% de l'animation, transition 0.15s
 
 ### Combat — Game Feel
 - `PlayerCombat` utilise une séquence coroutine en 3 phases : anticipation (squash) → release (stretch + hit detection) → recovery
