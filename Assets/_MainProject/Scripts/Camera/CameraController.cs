@@ -1,42 +1,34 @@
 using UnityEngine;
 
 /// <summary>
-/// Caméra isométrique qui suit le joueur.
-/// Vue top-down avec angle ajustable et zoom à la molette.
+/// Caméra isométrique style Path of Exile 2 — perspective, angle prononcé, vue droite.
 ///
-/// SETUP:
-///   1. Créer un GameObject vide "CameraRig"
+/// SETUP :
+///   1. Ajouter ce script sur le GameObject "CameraRig" (vide)
 ///   2. Mettre la Main Camera en enfant de CameraRig
-///   3. Ajouter ce script sur CameraRig
-///   4. Positionner la Main Camera en enfant :
-///      - Position locale : (0, 15, -15) (ajuster selon le goût)
-///      - Rotation locale : (45, 0, 0)
-///      - La caméra doit être en mode Orthographic ou Perspective selon préférence
-///   
-///   Alternative rapide : ajouter ce script sur la Main Camera directement
-///   et il configurera tout automatiquement.
+///   3. Reset la transform de la Main Camera (position/rotation à zéro)
+///   4. S'assurer que la Main Camera est en mode Perspective
 /// </summary>
 public class CameraController : MonoBehaviour
 {
     [Header("Cible")]
-    [SerializeField] private Transform target; // Le joueur
+    [SerializeField] private Transform target;
 
-    [Header("Position")]
-    [SerializeField] private Vector3 offset = new Vector3(-7, 10, -7);
+    [Header("Suivi")]
     [SerializeField] private float followSpeed = 8f;
 
-    [Header("Rotation")]
-    [SerializeField] private float cameraAngle = 45f; // Angle en X
-    [SerializeField] private float cameraYRotation = 45f; // Rotation en Y (pour vue iso)
+    [Header("Angle caméra — style PoE2")]
+    [SerializeField] private float pitchAngle = 60f;   // Inclinaison vers le sol (55-65 pour PoE2)
+    [SerializeField] private float yawAngle   = 0f;    // Rotation horizontale (0 = face au nord)
 
-    [Header("Zoom")]
-    [SerializeField] private float zoomSpeed = 3f;
-    [SerializeField] private float minZoom = 8f;
-    [SerializeField] private float maxZoom = 25f;
-    [SerializeField] private float currentZoom = 8f;
+    [Header("Distance / Zoom")]
+    [SerializeField] private float distance    = 28f;
+    [SerializeField] private float minDistance = 18f;
+    [SerializeField] private float maxDistance = 48f;
+    [SerializeField] private float zoomSpeed   = 4f;
 
-    [Header("Configuration auto")]
-    [SerializeField] private bool useOrthographic = true;
+    [Header("Perspective")]
+    [SerializeField] private float fieldOfView = 38f;
 
     private Camera cam;
 
@@ -49,7 +41,6 @@ public class CameraController : MonoBehaviour
 
     private void Start()
     {
-        // Trouver le joueur automatiquement si non assigné
         if (target == null)
         {
             GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
@@ -57,19 +48,16 @@ public class CameraController : MonoBehaviour
                 target = playerObj.transform;
         }
 
-        // Configuration de la caméra
         if (cam != null)
         {
-            cam.orthographic = useOrthographic;
-            if (useOrthographic)
-                cam.orthographicSize = currentZoom;
+            cam.orthographic = false;
+            cam.fieldOfView  = fieldOfView;
         }
 
-        // Positionner immédiatement
         if (target != null)
         {
-            transform.position = target.position + offset;
-            transform.rotation = Quaternion.Euler(cameraAngle, cameraYRotation, 0);
+            transform.position = CalculateDesiredPosition();
+            transform.rotation = Quaternion.Euler(pitchAngle, yawAngle, 0f);
         }
     }
 
@@ -77,22 +65,25 @@ public class CameraController : MonoBehaviour
     {
         if (target == null) return;
 
-        // Suivre le joueur avec smoothing
-        Vector3 desiredPosition = target.position + offset;
-        transform.position = Vector3.Lerp(transform.position, desiredPosition, followSpeed * Time.deltaTime);
-
-        // Rotation fixe isométrique
-        transform.rotation = Quaternion.Euler(cameraAngle, cameraYRotation, 0);
-
-        // Zoom à la molette
         HandleZoom();
+
+        Vector3 desired = CalculateDesiredPosition();
+        transform.position = Vector3.Lerp(transform.position, desired, followSpeed * Time.deltaTime);
+        transform.rotation = Quaternion.Euler(pitchAngle, yawAngle, 0f);
+    }
+
+    // Place la caméra en arrière du joueur selon le pitch/yaw et la distance.
+    private Vector3 CalculateDesiredPosition()
+    {
+        Quaternion rotation = Quaternion.Euler(pitchAngle, yawAngle, 0f);
+        Vector3 offset = rotation * Vector3.back * distance;
+        return target.position + offset;
     }
 
     private void HandleZoom()
     {
         float scrollInput = Input.mouseScrollDelta.y;
 
-        // Support manette (optionnel : triggers)
         if (UnityEngine.InputSystem.Gamepad.current != null)
         {
             float dpad = UnityEngine.InputSystem.Gamepad.current.dpad.y.ReadValue();
@@ -102,21 +93,8 @@ public class CameraController : MonoBehaviour
 
         if (Mathf.Abs(scrollInput) > 0.01f)
         {
-            currentZoom -= scrollInput * zoomSpeed;
-            currentZoom = Mathf.Clamp(currentZoom, minZoom, maxZoom);
-
-            if (cam != null)
-            {
-                if (cam.orthographic)
-                {
-                    cam.orthographicSize = currentZoom;
-                }
-                else
-                {
-                    // Pour perspective, ajuster l'offset
-                    offset = offset.normalized * currentZoom * 1.5f;
-                }
-            }
+            distance -= scrollInput * zoomSpeed;
+            distance  = Mathf.Clamp(distance, minDistance, maxDistance);
         }
     }
 }

@@ -17,6 +17,7 @@ des écoles ouvertes.
 - Assets/_MainProject/Scripts/Enemy/ — EnemyAI, EnemySpawner
 - Assets/_MainProject/Scripts/Camera/ — CameraController
 - Assets/_MainProject/Scripts/UI/ — WorldHealthBar, PlayerHUD, DamageNumber
+- Assets/_MainProject/Scripts/Editor/ — FixHeroModelHeight (outil Editor uniquement)
 - Assets/_MainProject/Scripts/Skills/ — (à venir) SkillData, SkillCaster
 - Assets/_MainProject/Data/Skills/ — (à venir) ScriptableObject assets
 - Assets/_MainProject/Prefabs/ — Prefabs joueur, ennemis, effets
@@ -31,6 +32,21 @@ des écoles ouvertes.
 - Événements C# (event Action) pour la communication entre systèmes
 
 ## Notes techniques importantes
+
+### Caméra — Style Path of Exile 2
+- `CameraController` posé sur un GameObject vide `CameraRig` ; la Main Camera est enfant avec transform resetée à zéro
+- **Perspective** (pas orthographic) avec FOV 38° par défaut
+- `pitchAngle = 60°` (inclinaison vers le sol, ajuster entre 55–65 pour varier)
+- `yawAngle = 0°` (vue droite face au nord, pas diagonale)
+- Le zoom ajuste `distance` (pas `orthographicSize`) — plage 18–48 par défaut
+- La position est calculée par code (`rotation * Vector3.back * distance`) : ne pas poser d'offset manuel sur la Main Camera
+- Paramètres Inspector : `pitchAngle`, `yawAngle`, `distance`, `minDistance`, `maxDistance`, `fieldOfView`, `followSpeed`
+
+### Caméra — Cohérence avec l'input joueur
+- `PlayerController` contient `isoMatrix = Matrix4x4.Rotate(Quaternion.Euler(0, 45, 0))` **hardcodé**
+- Cette valeur doit correspondre au `yawAngle` de la caméra pour que WASD soit aligné avec l'écran
+- Avec `yawAngle = 0°`, l'isoMatrix devrait être `Euler(0, 0, 0)` — sinon W déplace en diagonale plutôt que vers le haut de l'écran
+- Si on change `yawAngle`, mettre à jour `isoMatrix` en conséquence
 
 ### Personnage joueur — Setup scène
 - `Player` : NavMeshAgent (`baseOffset = 1.0`), PlayerController, PlayerCombat, HealthSystem
@@ -61,8 +77,21 @@ des écoles ouvertes.
 - `HitFeedback` utilise aussi `Time.unscaledDeltaTime` pour le flash lerp (compatible hit stop)
 - `DamageNumber` est entièrement créé par code (TextMesh), pas de prefab requis — appelé via `DamageNumber.Spawn()`
 
+### Combat — Autres features joueur
+- **Auto-aim manette** : `PlayerCombat` snap automatiquement vers l'ennemi le plus proche (`autoAimRange`) quand `IsUsingGamepad` est vrai
+- **LookAtMouse** : en souris, le joueur se tourne vers le curseur avant chaque attaque
+- **Knockback** : sur hit réussi, l'ennemi est projeté via `NavMesh.SamplePosition` + `agent.Warp` (ou `Rigidbody.AddForce` si pas de NavMeshAgent)
+- **Détection en cône** : `attackAngle = 90°`, `attackRange = 2.5f` par défaut
+
+### IA ennemie — EnemyAI
+- State machine : `Idle → Chase → Attack → Dead`
+- **Patrol optionnel** (`enablePatrol`) : se déplace vers des points aléatoires dans `patrolRadius` depuis le spawn
+- **Aggro** : détection à `detectionRange`, perte d'aggro à `loseAggroRange`, aggro immédiat si touché en Idle
+- **Windup telegraphé** : scale-up temporaire (`x1.1`) pendant `attackWindup` avant que le dégât soit appliqué
+- **Loot drop** : `lootDropPrefabs[]` + `dropChance` (0–1), drop aléatoire à la mort
+
 ## Phase actuelle
-Phase 1 : Core loop complète — mouvement, combat, IA ennemis, game feel (hit stop, squash/stretch, chiffres de dégâts)
+Phase 1 : Core loop complète — mouvement (WASD + click-to-move), combat (cône + knockback + auto-aim), IA ennemis (state machine + patrol + loot), caméra style PoE2, game feel (hit stop, squash/stretch, chiffres de dégâts)
 
 ## Prochaines étapes
 Phase 2 : Système de skills (ScriptableObjects + SkillCaster + UI)
