@@ -1,118 +1,275 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 /// <summary>
-/// Couche d'abstraction pour les inputs.
-/// Supporte le nouveau Input System ET le Legacy Input Manager simultanément.
-/// Le joueur peut utiliser clavier/souris OU manette à tout moment.
+/// Gestionnaire d'input centralisé — Lit les inputs et les distribue.
+/// Supporte Legacy Input Manager ET New Input System (mode Both).
 /// 
-/// SETUP: Ajouter ce script sur un GameObject "GameInput" dans la scène.
-/// Requires: New Input System Package installé + Both dans Player Settings > Active Input Handling
+/// Layout clavier/souris :
+///   WASD          → Mouvement
+///   Souris        → Visée / Facing
+///   Clic gauche   → Attaque
+///   Clic droit    → Skill secondaire (futur)
+///   Espace        → Esquive
+///   Shift gauche  → Bloc (maintenir)
+///   Ctrl gauche   → Sprint (maintenir)
+///   1-6           → Skills (futur)
+///   Tab           → Skill tree (futur)
+///   I             → Inventaire (futur)
+///   
+/// Layout manette :
+///   Stick gauche  → Mouvement
+///   Stick droit   → Visée
+///   X / Square    → Attaque
+///   A / Cross     → Esquive
+///   LT            → Bloc (maintenir)
+///   LB            → Sprint (maintenir)
+///   RT/RB         → Skills (futur)
 /// </summary>
 public class GameInput : MonoBehaviour
 {
-    public static GameInput Instance { get; private set; }
+    [Header("Références — Glisser depuis l'Inspector")]
+    [SerializeField] private PlayerController playerController;
+    [SerializeField] private CombatController combatController;
 
-    [Header("New Input System Actions")]
-    private InputAction moveAction;
-    private InputAction attackAction;
-    private InputAction pointerPositionAction;
-    private InputAction pointerClickAction;
+    [Header("Sensibilité")]
+    [SerializeField] private float gamepadDeadzone = 0.15f;
+    [SerializeField] private float gamepadAimDeadzone = 0.25f;
 
-    // --- État des inputs ---
-    public Vector2 MoveInput { get; private set; }
-    public Vector3 MouseWorldPosition { get; private set; }
-    public bool AttackPressed { get; private set; }
-    public bool MoveClickPressed { get; private set; }
-    public bool IsUsingGamepad { get; private set; }
+    [Header("Debug")]
+    [SerializeField] private bool logInputs = false;
 
-    private Camera mainCam;
-
-    private void Awake()
-    {
-        if (Instance != null && Instance != this) { Destroy(gameObject); return; }
-        Instance = this;
-        DontDestroyOnLoad(gameObject);
-
-        // Définir les actions programmatiquement (pas besoin de .inputactions asset)
-        moveAction = new InputAction("Move", InputActionType.Value, null);
-        moveAction.AddCompositeBinding("2DVector")
-            .With("Up", "<Keyboard>/w")
-            .With("Down", "<Keyboard>/s")
-            .With("Left", "<Keyboard>/a")
-            .With("Right", "<Keyboard>/d");
-        moveAction.AddBinding("<Gamepad>/leftStick");
-
-        attackAction = new InputAction("Attack", InputActionType.Button);
-        attackAction.AddBinding("<Mouse>/leftButton");
-        attackAction.AddBinding("<Keyboard>/space");
-        attackAction.AddBinding("<Gamepad>/buttonWest"); // X sur Xbox, Square sur PS
-
-        pointerPositionAction = new InputAction("PointerPos", InputActionType.Value, "<Mouse>/position");
-        pointerClickAction = new InputAction("PointerClick", InputActionType.Button, "<Mouse>/rightButton");
-    }
-
-    private void OnEnable()
-    {
-        moveAction.Enable();
-        attackAction.Enable();
-        pointerPositionAction.Enable();
-        pointerClickAction.Enable();
-    }
-
-    private void OnDisable()
-    {
-        moveAction.Disable();
-        attackAction.Disable();
-        pointerPositionAction.Disable();
-        pointerClickAction.Disable();
-    }
-
-    private void Start()
-    {
-        mainCam = Camera.main;
-    }
+    // Détection automatique clavier vs manette
+    private bool isUsingGamepad;
+    private float lastGamepadInput;
+    private float lastKeyboardInput;
 
     private void Update()
     {
-        // --- Mouvement ---
-        // Nouveau Input System (priorité)
-        Vector2 newMove = moveAction.ReadValue<Vector2>();
+        DetectInputDevice();
 
-        // Legacy fallback
-        Vector2 legacyMove = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
-
-        // Utilise celui qui a une valeur
-        MoveInput = newMove.sqrMagnitude > 0.01f ? newMove : legacyMove;
-
-        // Détecte si le joueur utilise une manette
-        IsUsingGamepad = Gamepad.current != null && newMove.sqrMagnitude > 0.01f;
-
-        // --- Attaque ---
-        AttackPressed = attackAction.WasPressedThisFrame() || Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space);
-
-        // --- Clic de mouvement (point-and-click avec clic droit) ---
-        MoveClickPressed = pointerClickAction.WasPressedThisFrame() || Input.GetMouseButtonDown(1);
-
-        // --- Position de la souris dans le monde ---
-        UpdateMouseWorldPosition();
+        HandleMovementInput();
+        HandleAimInput();
+        HandleCombatInput();
     }
 
-    private void UpdateMouseWorldPosition()
+    // ========================================
+    // DÉTECTION DU PÉRIPHÉRIQUE
+    // ========================================
+
+    private void DetectInputDevice()
     {
-        if (mainCam == null) return;
+        // Détecter si le joueur utilise le gamepad ou le clavier
+        // basé sur le dernier input significatif
+        float gpMagnitude = new Vector2(
+            Input.GetAxisRaw("Horizontal"),
+            Input.GetAxisRaw("Vertical")
+        ).magnitude;
 
-        Vector2 screenPos = pointerPositionAction.ReadValue<Vector2>();
-        if (screenPos == Vector2.zero)
-            screenPos = Input.mousePosition;
-
-        // Raycast depuis la caméra vers le plan du sol (Y = 0)
-        Ray ray = mainCam.ScreenPointToRay(screenPos);
-        Plane groundPlane = new Plane(Vector3.up, Vector3.zero);
-
-        if (groundPlane.Raycast(ray, out float distance))
+        // Vérifier les axes de gamepad spécifiques
+        float gpRightStick = 0f;
+        try
         {
-            MouseWorldPosition = ray.GetPoint(distance);
+            gpRightStick = new Vector2(
+                Input.GetAxisRaw("RightStickHorizontal"),
+                Input.GetAxisRaw("RightStickVertical")
+            ).magnitude;
         }
+        catch { /* L'axe n'existe pas dans l'Input Manager, on ignore */ }
+
+        float gpTrigger = 0f;
+        try
+        {
+            gpTrigger = Mathf.Abs(Input.GetAxisRaw("LeftTrigger"));
+        }
+        catch { /* L'axe n'existe pas */ }
+
+        if (gpRightStick > gamepadAimDeadzone || gpTrigger > 0.1f)
+            lastGamepadInput = Time.unscaledTime;
+
+        // Détecter clavier/souris
+        if (Input.anyKeyDown || Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1) ||
+            Mathf.Abs(Input.GetAxisRaw("Mouse X")) > 0.1f ||
+            Mathf.Abs(Input.GetAxisRaw("Mouse Y")) > 0.1f)
+        {
+            // Filtrer les touches qui sont aussi mappées aux axes gamepad
+            if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.A) ||
+                Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.D) ||
+                Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.LeftShift) ||
+                Input.GetKeyDown(KeyCode.LeftControl) ||
+                Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1) ||
+                Mathf.Abs(Input.GetAxisRaw("Mouse X")) > 0.1f)
+            {
+                lastKeyboardInput = Time.unscaledTime;
+            }
+        }
+
+        isUsingGamepad = lastGamepadInput > lastKeyboardInput;
+    }
+
+    // ========================================
+    // MOUVEMENT (chaque frame)
+    // ========================================
+
+    private void HandleMovementInput()
+    {
+        if (playerController == null) return;
+
+        Vector2 move;
+
+        if (isUsingGamepad)
+        {
+            // Stick gauche
+            move = new Vector2(
+                Input.GetAxisRaw("Horizontal"),
+                Input.GetAxisRaw("Vertical")
+            );
+
+            // Appliquer la deadzone
+            if (move.magnitude < gamepadDeadzone)
+                move = Vector2.zero;
+        }
+        else
+        {
+            // WASD — input digital (pas de smoothing, réponse instantanée)
+            move = Vector2.zero;
+            if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) move.y += 1f;
+            if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) move.y -= 1f;
+            if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) move.x += 1f;
+            if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) move.x -= 1f;
+        }
+
+        playerController.SetMoveInput(move);
+    }
+
+    // ========================================
+    // VISÉE / FACING (chaque frame)
+    // ========================================
+
+    private void HandleAimInput()
+    {
+        if (playerController == null) return;
+
+        if (isUsingGamepad)
+        {
+            // Stick droit pour viser
+            Vector2 aim = Vector2.zero;
+            try
+            {
+                aim = new Vector2(
+                    Input.GetAxisRaw("RightStickHorizontal"),
+                    Input.GetAxisRaw("RightStickVertical")
+                );
+            }
+            catch { /* Axe non configuré */ }
+
+            if (aim.magnitude < gamepadAimDeadzone)
+                aim = Vector2.zero;
+
+            playerController.SetAimInput(aim, true);
+        }
+        else
+        {
+            // La souris contrôle le facing — géré directement par PlayerController
+            // via le raycast sur le plan du sol
+            playerController.SetAimInput(Vector2.zero, false);
+        }
+    }
+
+    // ========================================
+    // COMBAT (boutons)
+    // ========================================
+
+    private void HandleCombatInput()
+    {
+        if (combatController == null) return;
+
+        // === ESQUIVE ===
+        bool dodgePressed = Input.GetKeyDown(KeyCode.Space);
+
+        // Gamepad : bouton A / Cross
+        try { dodgePressed |= Input.GetButtonDown("Jump"); } catch { }
+
+        if (dodgePressed)
+        {
+            // Direction = là où le joueur pousse le stick/WASD
+            Vector2 moveDir = Vector2.zero;
+            if (isUsingGamepad)
+            {
+                moveDir = new Vector2(
+                    Input.GetAxisRaw("Horizontal"),
+                    Input.GetAxisRaw("Vertical")
+                );
+            }
+            else
+            {
+                if (Input.GetKey(KeyCode.W)) moveDir.y += 1f;
+                if (Input.GetKey(KeyCode.S)) moveDir.y -= 1f;
+                if (Input.GetKey(KeyCode.D)) moveDir.x += 1f;
+                if (Input.GetKey(KeyCode.A)) moveDir.x -= 1f;
+            }
+
+            combatController.OnDodgeInput(moveDir);
+
+            if (logInputs) Debug.Log($"[Input] Esquive direction: {moveDir}");
+        }
+
+        // === BLOC ===
+        bool blockHeld;
+        if (isUsingGamepad)
+        {
+            // LT (Left Trigger)
+            float lt = 0f;
+            try { lt = Input.GetAxisRaw("LeftTrigger"); } catch { }
+            blockHeld = lt > 0.3f;
+        }
+        else
+        {
+            blockHeld = Input.GetKey(KeyCode.LeftShift);
+        }
+
+        combatController.OnBlockInput(blockHeld);
+
+        // === SPRINT ===
+        bool sprintHeld;
+        if (isUsingGamepad)
+        {
+            // LB (Left Bumper)
+            bool lb = false;
+            try { lb = Input.GetButton("LeftBumper"); } catch { }
+            sprintHeld = lb;
+        }
+        else
+        {
+            sprintHeld = Input.GetKey(KeyCode.LeftControl);
+        }
+
+        combatController.OnSprintInput(sprintHeld);
+
+        // === ATTAQUE ===
+        bool attackPressed;
+        if (isUsingGamepad)
+        {
+            // X / Square
+            bool xButton = false;
+            try { xButton = Input.GetButtonDown("Fire1"); } catch { }
+            attackPressed = xButton;
+        }
+        else
+        {
+            attackPressed = Input.GetMouseButtonDown(0);
+        }
+
+        if (attackPressed)
+        {
+            combatController.OnAttackInput();
+            if (logInputs) Debug.Log("[Input] Attaque");
+        }
+
+        // === SKILLS (futur, touche 1-6) ===
+        // for (int i = 0; i < 6; i++)
+        // {
+        //     if (Input.GetKeyDown(KeyCode.Alpha1 + i))
+        //         skillCaster.CastSkill(i);
+        // }
     }
 }
