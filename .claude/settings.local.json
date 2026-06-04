@@ -4,7 +4,8 @@
       "Bash(Get-ChildItem -Path \"E:\\\\PortfolioProject\\\\ARPGProject\" -Directory)",
       "Bash(Select-Object Name)",
       "mcp__coplay-mcp__save_scene",
-      "mcp__coplay-mcp__check_compile_errors"
+      "mcp__coplay-mcp__check_compile_errors",
+      "mcp__coplay-mcp__create_ui_element"
     ]
   }
 }

@@ -26,9 +26,12 @@ public class HealthSystem : MonoBehaviour
     public bool IsDead { get; private set; }
     public float HealthPercent => CurrentHealth / maxHealth;
 
+    private CombatController _combatController;
+
     private void Awake()
     {
         CurrentHealth = maxHealth;
+        _combatController = GetComponent<CombatController>();
     }
 
     private void Update()
@@ -47,6 +50,11 @@ public class HealthSystem : MonoBehaviour
     {
         if (IsDead) return;
         if (damage <= 0) return;
+
+        if (_combatController != null && attacker != null)
+            damage = _combatController.FilterIncomingDamage(damage, attacker.transform.position);
+
+        if (damage <= 0) return; // absorbed by dodge i-frames or perfect block
 
         CurrentHealth = Mathf.Max(0, CurrentHealth - damage);
         OnHealthChanged?.Invoke(CurrentHealth, maxHealth);

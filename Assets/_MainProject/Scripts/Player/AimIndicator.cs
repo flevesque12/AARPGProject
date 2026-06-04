@@ -17,8 +17,13 @@ public class AimIndicator : MonoBehaviour
 
     [Header("Couleurs")]
     [SerializeField] private Color normalColor = new Color(1f, 1f, 1f, 0.5f);
-    [SerializeField] private Color enemyHoverColor = new Color(1f, 0.3f, 0.2f, 0.8f);   // Rouge quand sur un ennemi
+    [SerializeField] private Color enemyHoverColor = new Color(1f, 0.3f, 0.2f, 0.8f);
+    [SerializeField] private Color riposteWindowColor = new Color(1f, 0.78f, 0.1f, 0.95f);
     [SerializeField] private float colorTransitionSpeed = 10f;
+
+    [Header("Riposte")]
+    [SerializeField] private float ripostePulseSpeed = 6f;
+    [SerializeField] private float riposteSizeMultiplier = 1.5f;
 
     [Header("Ligne de visée (optionnel)")]
     [SerializeField] private bool showAimLine = false;
@@ -27,9 +32,9 @@ public class AimIndicator : MonoBehaviour
 
     [Header("Références")]
     [SerializeField] private PlayerController playerController;
+    [SerializeField] private RiposteSystem riposteSystem;
     [SerializeField] private LayerMask enemyLayer;
 
-    // === État ===
     private GameObject cursorInstance;
     private Renderer cursorRenderer;
     private Color currentColor;
@@ -39,6 +44,8 @@ public class AimIndicator : MonoBehaviour
     {
         if (playerController == null)
             playerController = FindAnyObjectByType<PlayerController>();
+        if (riposteSystem == null)
+            riposteSystem = FindAnyObjectByType<RiposteSystem>();
 
         // Créer le curseur
         if (cursorPrefab != null)
@@ -106,12 +113,29 @@ public class AimIndicator : MonoBehaviour
             isOverEnemy = hits.Length > 0;
         }
 
-        // Transition de couleur
-        Color targetColor = isOverEnemy ? enemyHoverColor : normalColor;
-        currentColor = Color.Lerp(currentColor, targetColor, colorTransitionSpeed * Time.deltaTime);
+        // Riposte window: gold pulse + scale up; overrides enemy hover
+        bool riposteOpen = riposteSystem != null && riposteSystem.IsRiposteWindowOpen;
 
+        Color targetColor;
+        float targetScale;
+        if (riposteOpen)
+        {
+            float t = Mathf.PingPong(Time.unscaledTime * ripostePulseSpeed, 1f);
+            targetColor = Color.Lerp(riposteWindowColor, Color.white, t * 0.35f);
+            targetScale = cursorSize * riposteSizeMultiplier;
+        }
+        else
+        {
+            targetColor = isOverEnemy ? enemyHoverColor : normalColor;
+            targetScale = cursorSize;
+        }
+
+        currentColor = Color.Lerp(currentColor, targetColor, colorTransitionSpeed * Time.deltaTime);
         if (cursorRenderer != null)
             cursorRenderer.material.color = currentColor;
+
+        float currentScale = Mathf.Lerp(cursorInstance.transform.localScale.x, targetScale, Time.deltaTime * 14f);
+        cursorInstance.transform.localScale = Vector3.one * currentScale;
 
         // Ligne de visée
         if (showAimLine && aimLine != null)

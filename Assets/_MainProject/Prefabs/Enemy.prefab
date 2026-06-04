@@ -17,6 +17,8 @@ GameObject:
   - component: {fileID: 5034272439034523414}
   - component: {fileID: 1910495194227797789}
   - component: {fileID: 7663787447273453014}
+  - component: {fileID: 5441456893622624933}
+  - component: {fileID: 368815506451454417}
   m_Layer: 7
   m_Name: Enemy
   m_TagString: Untagged
@@ -201,7 +203,6 @@ MonoBehaviour:
   flashColor: {r: 1, g: 1, b: 1, a: 1}
   flashDuration: 0.1
   punchScale: 1.2
-  punchDuration: 0.1
   deathColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
   deathShrinkDuration: 0.5
 --- !u!114 &7663787447273453014
@@ -225,3 +226,47 @@ MonoBehaviour:
   hideWhenFull: 1
   alwaysShow: 0
   showDuration: 3
+--- !u!114 &5441456893622624933
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5160285624754998646}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 63763485f106b0e4fa0d263faac64840, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PostureSystem
+  _postureMax: 60
+  _postureRegenRate: 10
+  _staggerDuration: 1.5
+  _damageMultiplierWhenStaggered: 2.5
+  OnStaggerEnter:
+    m_PersistentCalls:
+      m_Calls: []
+  OnStaggerExit:
+    m_PersistentCalls:
+      m_Calls: []
+--- !u!114 &368815506451454417
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5160285624754998646}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9353bedc9d3ce874885e893bbb519c8f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PostureBarUI
+  _yOffset: 2.05
+  _barWidth: 1.2
+  _barHeight: 0.08
+  _postureColor: {r: 0.85, g: 0.6, b: 0.1, a: 1}
+  _pulseColor: {r: 1, g: 1, b: 1, a: 1}
+  _bgColor: {r: 0.12, g: 0.12, b: 0.12, a: 1}
+  _pulseThreshold: 0.3
+  _pulseSpeed: 4
+  _hideDelay: 3
+  _staggerTextDuration: 1

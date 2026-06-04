@@ -8,7 +8,7 @@ using System.Collections;
 /// </summary>
 public class HitFeedback : MonoBehaviour
 {
-    [Header("Flash")]
+    [Header("Flash — Dégâts")]
     [SerializeField] private Renderer modelRenderer;
     [SerializeField] private Color flashColor = Color.white;
     [SerializeField] private float flashDuration = 0.2f;
@@ -16,11 +16,19 @@ public class HitFeedback : MonoBehaviour
     [Header("Scale Punch")]
     [SerializeField] private float punchScale = 1.2f;
 
+    [Header("Flash — Bloc")]
+    [SerializeField] private Color blockHitColor = new Color(0.3f, 0.6f, 1f, 1f);
+    [SerializeField] private Color perfectBlockColor = new Color(1f, 0.88f, 0.25f, 1f);
+    [SerializeField] private Color blockBrokenColor = new Color(1f, 0.15f, 0.1f, 1f);
+    [SerializeField] private float blockFlashDuration = 0.18f;
+    [SerializeField] private float perfectBlockPunchScale = 1.35f;
+
     [Header("Death")]
     [SerializeField] private Color deathColor = new Color(0.3f, 0.3f, 0.3f, 1f);
     [SerializeField] private float deathShrinkDuration = 0.5f;
 
     private HealthSystem health;
+    private BlockSystem blockSystem;
     private MaterialPropertyBlock propBlock;
     private Color originalColor;
     private Vector3 originalScale;
@@ -31,6 +39,7 @@ public class HitFeedback : MonoBehaviour
     private void Awake()
     {
         health = GetComponent<HealthSystem>();
+        blockSystem = GetComponent<BlockSystem>();
         propBlock = new MaterialPropertyBlock();
 
         if (modelRenderer == null)
@@ -54,6 +63,12 @@ public class HitFeedback : MonoBehaviour
             health.OnDamaged += OnDamaged;
             health.OnDeath += OnDeath;
         }
+        if (blockSystem != null)
+        {
+            blockSystem.OnBlockHit += OnBlockHit;
+            blockSystem.OnPerfectBlock += OnPerfectBlock;
+            blockSystem.OnBlockBroken += OnBlockBroken;
+        }
     }
 
     private void OnDisable()
@@ -63,41 +78,66 @@ public class HitFeedback : MonoBehaviour
             health.OnDamaged -= OnDamaged;
             health.OnDeath -= OnDeath;
         }
+        if (blockSystem != null)
+        {
+            blockSystem.OnBlockHit -= OnBlockHit;
+            blockSystem.OnPerfectBlock -= OnPerfectBlock;
+            blockSystem.OnBlockBroken -= OnBlockBroken;
+        }
     }
 
     private void OnDamaged(float damage)
     {
-        if (flashCoroutine != null)
-            StopCoroutine(flashCoroutine);
-        flashCoroutine = StartCoroutine(FlashAndPunch());
-
+        TriggerFlash(flashColor, punchScale, flashDuration);
         DamageNumber.Spawn(transform.position + Vector3.up * 1.2f, damage);
     }
 
-    private IEnumerator FlashAndPunch()
+    private void OnBlockHit(float residualDamage)
     {
-        Vector3 punchScaleVec = originalScale * punchScale;
+        TriggerFlash(blockHitColor, punchScale * 0.85f, blockFlashDuration);
+    }
 
-        // --- Flash in + scale punch (rapide : 25% de la durée) ---
-        float flashInTime = flashDuration * 0.25f;
+    private void OnPerfectBlock()
+    {
+        TriggerFlash(perfectBlockColor, perfectBlockPunchScale, flashDuration);
+    }
+
+    private void OnBlockBroken()
+    {
+        TriggerFlash(blockBrokenColor, punchScale * 1.1f, flashDuration);
+    }
+
+    private void TriggerFlash(Color color, float punch, float duration)
+    {
+        if (flashCoroutine != null)
+            StopCoroutine(flashCoroutine);
+        flashCoroutine = StartCoroutine(FlashAndPunch(color, punch, duration));
+    }
+
+    private IEnumerator FlashAndPunch(Color color, float punch, float duration)
+    {
+        Vector3 punchScaleVec = originalScale * punch;
+
+        // Flash in + scale punch (25% de la durée)
+        float flashInTime = duration * 0.25f;
         float elapsed = 0f;
         while (elapsed < flashInTime)
         {
             elapsed += Time.unscaledDeltaTime;
             float t = elapsed / flashInTime;
-            SetColor(Color.Lerp(originalColor, flashColor, t));
+            SetColor(Color.Lerp(originalColor, color, t));
             transform.localScale = Vector3.Lerp(originalScale, punchScaleVec, t);
             yield return null;
         }
 
-        // --- Flash out + retour à l'échelle (75% de la durée) ---
-        float flashOutTime = flashDuration * 0.75f;
+        // Flash out + retour à l'échelle (75% de la durée)
+        float flashOutTime = duration * 0.75f;
         elapsed = 0f;
         while (elapsed < flashOutTime)
         {
             elapsed += Time.unscaledDeltaTime;
             float t = elapsed / flashOutTime;
-            SetColor(Color.Lerp(flashColor, originalColor, t));
+            SetColor(Color.Lerp(color, originalColor, t));
             transform.localScale = Vector3.Lerp(punchScaleVec, originalScale, t);
             yield return null;
         }

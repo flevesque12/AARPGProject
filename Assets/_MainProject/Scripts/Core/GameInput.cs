@@ -95,7 +95,6 @@ public class GameInput : MonoBehaviour
             if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.A) ||
                 Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.D) ||
                 Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.LeftShift) ||
-                Input.GetKeyDown(KeyCode.LeftControl) ||
                 Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1) ||
                 Mathf.Abs(Input.GetAxisRaw("Mouse X")) > 0.1f)
             {
@@ -224,7 +223,7 @@ public class GameInput : MonoBehaviour
         }
         else
         {
-            blockHeld = Input.GetKey(KeyCode.LeftShift);
+            blockHeld = Input.GetMouseButton(1); // Right Click
         }
 
         combatController.OnBlockInput(blockHeld);
@@ -240,7 +239,7 @@ public class GameInput : MonoBehaviour
         }
         else
         {
-            sprintHeld = Input.GetKey(KeyCode.LeftControl);
+            sprintHeld = Input.GetKey(KeyCode.LeftShift);
         }
 
         combatController.OnSprintInput(sprintHeld);

@@ -112,6 +112,9 @@ public class RiposteSystem : MonoBehaviour
                 OnRiposteHit?.Invoke(hit.gameObject, riposteDamage);
                 hitSomething = true;
 
+                var posture = hit.GetComponent<PostureSystem>();
+                posture?.DegradePosture(posture.PostureMax * 0.5f);
+
                 // Tourner le joueur vers la cible
                 Vector3 lookDir = hit.transform.position - transform.position;
                 lookDir.y = 0f;

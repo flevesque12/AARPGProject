@@ -446,7 +446,6 @@ GameObject:
   - component: {fileID: 7867620292484172203}
   - component: {fileID: 6392841490041903415}
   - component: {fileID: 435270273899746333}
-  - component: {fileID: 2780253333086417338}
   - component: {fileID: 9219819659801103650}
   - component: {fileID: 2114539416853121731}
   - component: {fileID: 3022189992993667711}
@@ -629,32 +628,6 @@ CharacterController:
   m_SkinWidth: 0.08
   m_MinMoveDistance: 0.001
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &2780253333086417338
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8494941975882599437}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: be8888767005b694e8269ecf3165e8f3, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::StaminaBarUI
-  fillImage: {fileID: 0}
-  backgroundImage: {fileID: 0}
-  canvasGroup: {fileID: 0}
-  fullColor: {r: 0.2, g: 0.8, b: 0.3, a: 1}
-  midColor: {r: 0.9, g: 0.8, b: 0.1, a: 1}
-  lowColor: {r: 0.9, g: 0.2, b: 0.15, a: 1}
-  lowThreshold: 0.25
-  midThreshold: 0.5
-  smoothSpeed: 8
-  flashDuration: 0.3
-  flashColor: {r: 1, g: 0, b: 0, a: 1}
-  hideDelay: 3
-  fadeSpeed: 4
-  staminaSystem: {fileID: 1177728379715588851}
 --- !u!114 &9219819659801103650
 MonoBehaviour:
   m_ObjectHideFlags: 0
