@@ -50,6 +50,7 @@ public class EnemyAI : MonoBehaviour
 
     private NavMeshAgent agent;
     private HealthSystem health;
+    private Animator animator;
     private Transform player;
     private float lastAttackTime = -999f;
     private float patrolTimer;
@@ -59,10 +60,18 @@ public class EnemyAI : MonoBehaviour
     private EnemyTelegraph _telegraph;
     private Coroutine _attackCoroutine;
 
+    // Animator parameter hashes
+    private static readonly int SpeedHash = Animator.StringToHash("Speed");
+    private static readonly int AttackHash = Animator.StringToHash("Attack");
+    private static readonly int HitHash = Animator.StringToHash("Hit");
+    private static readonly int StaggeredHash = Animator.StringToHash("Staggered");
+    private static readonly int DeadHash = Animator.StringToHash("Dead");
+
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
         health = GetComponent<HealthSystem>();
+        animator = GetComponentInChildren<Animator>();
 
         agent.speed = moveSpeed;
         agent.angularSpeed = 0;
@@ -130,6 +139,15 @@ public class EnemyAI : MonoBehaviour
         {
             RotateTowardsPlayer();
         }
+
+        // Update animator
+        UpdateAnimator();
+    }
+
+    private void UpdateAnimator()
+    {
+        if (animator == null) return;
+        animator.SetFloat(SpeedHash, agent.velocity.magnitude);
     }
 
     // === IDLE ===
@@ -207,6 +225,10 @@ public class EnemyAI : MonoBehaviour
         isAttacking = true;
         lastAttackTime = Time.time;
 
+        // Trigger attack animation
+        if (animator != null)
+            animator.SetTrigger(AttackHash);
+
         // Windup — telegraph visuel (remplace l'ancien scale-up)
         if (_telegraph != null)
             _telegraph.Telegraph(attackWindup);
@@ -243,6 +265,10 @@ public class EnemyAI : MonoBehaviour
         agent.ResetPath();
         agent.enabled = false;
 
+        // Trigger death animation
+        if (animator != null)
+            animator.SetTrigger(DeadHash);
+
         // Désactiver le collider pour ne plus bloquer
         Collider col = GetComponent<Collider>();
         if (col != null) col.enabled = false;
@@ -253,6 +279,10 @@ public class EnemyAI : MonoBehaviour
 
     private void HandleDamaged(float damage)
     {
+        // Trigger hit animation
+        if (animator != null)
+            animator.SetTrigger(HitHash);
+
         // Aggro immédiat si on prend des dégâts en Idle
         if (CurrentState == EnemyState.Idle)
         {
@@ -283,11 +313,19 @@ public class EnemyAI : MonoBehaviour
         if (_telegraph != null) _telegraph.Cancel();
         agent.ResetPath();
         agent.isStopped = true;
+
+        // Trigger stagger animation
+        if (animator != null)
+            animator.SetBool(StaggeredHash, true);
     }
 
     private void HandleStaggerExit()
     {
         agent.isStopped = false;
+
+        // Exit stagger animation
+        if (animator != null)
+            animator.SetBool(StaggeredHash, false);
     }
 
     private void RotateTowardsPlayer()

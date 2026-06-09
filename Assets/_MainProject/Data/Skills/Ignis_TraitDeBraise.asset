@@ -28,6 +28,6 @@ MonoBehaviour:
   projectileSpeed: 20
   projectileSize: 0.25
   skillColor: {r: 1, g: 0.35, b: 0.05, a: 1}
-  projectilePrefab: {fileID: 8411773951453677748, guid: f18f8647a59cfca4f9d1567d9cb95886, type: 3}
+  projectilePrefab: {fileID: 1895113444584765398, guid: 15f4160b5cc7f19498215933e2f61d08, type: 3}
   impactVFXPrefab: {fileID: 0}
   zonePrefab: {fileID: 0}

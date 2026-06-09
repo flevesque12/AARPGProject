@@ -452,6 +452,7 @@ GameObject:
   - component: {fileID: 1149624536421669827}
   - component: {fileID: 7560431567832264788}
   - component: {fileID: 1177728379715588851}
+  - component: {fileID: 5719718201188061950}
   m_Layer: 6
   m_Name: Player
   m_TagString: Player
@@ -581,11 +582,31 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHUD
   barWidth: 300
   barHeight: 25
+  staminaBarHeight: 18
   xOffset: 20
   yOffset: 20
+  barGap: 5
   healthColor: {r: 0.8, g: 0.15, b: 0.15, a: 1}
   bgColor: {r: 0.15, g: 0.15, b: 0.15, a: 0.8}
   borderColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
+  staminaFullColor: {r: 0.2, g: 0.8, b: 0.3, a: 1}
+  staminaMidColor: {r: 0.9, g: 0.8, b: 0.1, a: 1}
+  staminaLowColor: {r: 0.9, g: 0.2, b: 0.15, a: 1}
+  staminaFlashColor: {r: 1, g: 0, b: 0, a: 1}
+  lowThreshold: 0.25
+  midThreshold: 0.5
+  smoothSpeed: 8
+  flashDuration: 0.3
+  hideDelay: 3
+  fadeSpeed: 4
+  actionBarXOffset: 20
+  actionBarYOffset: 20
+  keyBoxWidth: 68
+  actionRowHeight: 26
+  actionRowGap: 4
+  skillSlotSize: 52
+  skillSlotGap: 8
+  skillBarYOffset: 20
 --- !u!114 &6392841490041903415
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -600,6 +621,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameInput
   playerController: {fileID: 5581066477004991939}
   combatController: {fileID: 9219819659801103650}
+  skillCaster: {fileID: 5719718201188061950}
   gamepadDeadzone: 0.15
   gamepadAimDeadzone: 0.25
   logInputs: 0
@@ -778,3 +800,27 @@ MonoBehaviour:
   regenDelay: 1.5
   outOfCombatRegenMultiplier: 3
   showDebugLog: 1
+--- !u!114 &5719718201188061950
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8494941975882599437}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1cde8fe1325d7c24a894f4a0ece874ea, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SkillCaster
+  _slots:
+  - {fileID: 11400000, guid: 2c155de986ce92a40a8eaf71aa1e9be9, type: 2}
+  - {fileID: 11400000, guid: 836a3a1b5cf1c794894101ec415e010e, type: 2}
+  - {fileID: 11400000, guid: 19b1ec1f8d234594fa8dc453782071e5, type: 2}
+  - {fileID: 11400000, guid: a508462141dbeb149a062f09e35392d9, type: 2}
+  _player: {fileID: 0}
+  _stamina: {fileID: 0}
+  _combat: {fileID: 0}
+  _sprint: {fileID: 0}
+  _enemyLayer:
+    serializedVersion: 2
+    m_Bits: 128
