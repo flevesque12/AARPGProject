@@ -23,7 +23,7 @@ public class CombatController : MonoBehaviour
     [SerializeField] private StaminaSystem staminaSystem;
 
     [Header("Attaque de base")]
-    [SerializeField] private float baseDamage = 15f;            // Dégâts de base (sera remplacé par les stats d'arme)
+    [SerializeField] private float baseDamage = 25f;            // Dégâts de base (sera remplacé par les stats d'arme)
     [SerializeField] private float attackRange = 2.5f;
     [SerializeField] private float attackAngle = 80f;
     [SerializeField] private float attackCooldown = 0.5f;

@@ -14,7 +14,7 @@ using UnityEngine.AI;
 /// ASTUCE RAPIDE POUR LE PREFAB ENNEMI:
 ///   Créer un Capsule rouge avec ces composants :
 ///   - NavMeshAgent
-///   - HealthSystem (maxHealth=50, destroyOnDeath=true, destroyDelay=1.5)
+///   - HealthSystem (maxHealth=100, destroyOnDeath=true, destroyDelay=1.5)
 ///   - HitFeedback
 ///   - EnemyAI
 ///   - WorldHealthBar

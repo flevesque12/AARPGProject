@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 97447f87a7774de44a064c6a1a9ec6bf, type: 3}
+  m_Name: Ignis_Explosion
+  m_EditorClassIdentifier: Assembly-CSharp::SkillData
+  skillName: Explosion Ignis
+  icon: {fileID: 0}
+  description: "D\xE9clenche une explosion au point vis\xE9 apr\xE8s un court d\xE9lai."
+  school: 0
+  skillType: 1
+  staminaCost: 25
+  cooldown: 2
+  baseDamage: 55
+  range: 8
+  radius: 2.5
+  castTime: 0.35
+  duration: 0
+  tickInterval: 0
+  projectileSpeed: 0
+  projectileSize: 0
+  skillColor: {r: 1, g: 0.5, b: 0, a: 1}
+  projectilePrefab: {fileID: 0}
+  impactVFXPrefab: {fileID: 2595655680767083771, guid: 5a7abfb55b9cd264a924b335726c2f4d, type: 3}
+  zonePrefab: {fileID: 0}

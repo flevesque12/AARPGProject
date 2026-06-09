@@ -30,6 +30,7 @@ public class GameInput : MonoBehaviour
     [Header("Références — Glisser depuis l'Inspector")]
     [SerializeField] private PlayerController playerController;
     [SerializeField] private CombatController combatController;
+    [SerializeField] private SkillCaster skillCaster;
 
     [Header("Sensibilité")]
     [SerializeField] private float gamepadDeadzone = 0.15f;
@@ -264,11 +265,13 @@ public class GameInput : MonoBehaviour
             if (logInputs) Debug.Log("[Input] Attaque");
         }
 
-        // === SKILLS (futur, touche 1-6) ===
-        // for (int i = 0; i < 6; i++)
-        // {
-        //     if (Input.GetKeyDown(KeyCode.Alpha1 + i))
-        //         skillCaster.CastSkill(i);
-        // }
+        // === SKILLS (touches 1-4) ===
+        if (skillCaster != null)
+        {
+            if (Input.GetKeyDown(KeyCode.Alpha1)) skillCaster.TryCastSkill(0);
+            if (Input.GetKeyDown(KeyCode.Alpha2)) skillCaster.TryCastSkill(1);
+            if (Input.GetKeyDown(KeyCode.Alpha3)) skillCaster.TryCastSkill(2);
+            if (Input.GetKeyDown(KeyCode.Alpha4)) skillCaster.TryCastSkill(3);
+        }
     }
 }

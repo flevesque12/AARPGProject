@@ -28,7 +28,7 @@ public class EnemyAI : MonoBehaviour
 
     [Header("Combat")]
     [SerializeField] private float attackRange = 2f;
-    [SerializeField] private float attackDamage = 10f;
+    [SerializeField] private float attackDamage = 17f;
     [SerializeField] private float attackCooldown = 1.5f;
     [SerializeField] private float attackWindup = 0.3f; // Temps avant que l'attaque touche
 

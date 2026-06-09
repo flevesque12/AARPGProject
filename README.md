@@ -137,6 +137,45 @@ Assets/_MainProject/Scripts/
 
 ---
 
+## Skills System (Phase 4)
+
+### SkillData (ScriptableObject)
+- Reusable data asset for all 7 elemental schools: `school`, `skillType`, `staminaCost`, `cooldown`, `baseDamage`, `range`, `radius`, `castTime`, `duration`, `tickInterval`, `skillColor`
+- Four skill types drive distinct cast behaviors: `Projectile`, `AoE`, `PersistentZone`, `DelayedAoE`
+- VFX fields (`projectilePrefab`, `impactVFXPrefab`, `zonePrefab`) with procedural fallback when null
+
+### SkillCaster (MonoBehaviour — Player)
+- 4 hotkey slots (keys `1`–`4`) mapped to `SkillData` assets
+- Respects combat priority: blocked during dodge (`CombatController.CanAct`), stops sprint on cast
+- Consumes stamina via `StaminaSystem.ConsumeStamina()`, tracks per-slot cooldowns
+- Cast target resolved from `PlayerController.AimWorldPosition`, clamped to `range`
+- Applies `PostureSystem.DamageMultiplierWhenStaggered` on staggered enemies
+- `OnCooldownChanged(slot, remaining, total)` event consumed by `PlayerHUD`
+
+### Ignis School — 4 skills
+
+| Skill | Type | Stamina | Cooldown | Damage | Notes |
+|---|---|---|---|---|---|
+| Trait de Braise | Projectile | 15 | 0.8s | 35 | Speed 20, OverlapSphere hit detection |
+| Explosion Ignis | AoE | 25 | 2s | 55 | Radius 2.5, 0.35s windup telegraph |
+| Mur de Feu | PersistentZone | 30 | 5s | 12/tick | 4s duration, tick every 0.4s |
+| Météore Ignis | DelayedAoE | 40 | 8s | 120 | Radius 3.5, 1.2s telegraph |
+
+### Skill VFX (procedural particle systems)
+- All VFX built entirely in code — no external assets required
+- Trait de Braise: glowing sphere core + billboard particle trail
+- Explosion Ignis: burst of 80 particles + rising ember sub-emitter
+- Mur de Feu: continuous donut-shaped flame emitter, rising particles
+- Météore Ignis: hemispheric blast of 150 particles + 40 gravity-affected rock fragments
+
+### Skill Bar HUD
+- 4 slots centered at screen bottom, school color tint per slot
+- Cooldown overlay: darkens from top, sweeps down as cooldown expires
+- Skill name displayed below each slot
+- Key number (1–4) shown in slot corner
+
+---
+
 ## TTK Targets (GDD v3.0)
 
 | Element | Target value |
@@ -158,7 +197,7 @@ Assets/_MainProject/Scripts/
 | Phase 1 | Movement, enemies, health, PoE2 camera, game feel | Done |
 | Phase 2 | Common Skills — dodge, perfect block, riposte, sprint, StaminaSystem, PlayerHUD | Done |
 | Phase 3 | Enemy telegraphing + Posture/Stagger system | Done |
-| Phase 4 | First school — Ignis (4 active skills) + SkillData ScriptableObject | Planned |
+| Phase 4 | First school — Ignis (4 active skills) + SkillData ScriptableObject | Done |
 | Phase 5 | Tissage Arcanique — 2 proc-slots, 3 triggers (OnDodge, OnKill, OnPerfectBlock) | Planned |
 | Phase 6 | Basic loot (rarity, affixes, sockets) | Planned |
 | Phase 7 | Second school + Layer B synergies (Condition Chains) | Planned |

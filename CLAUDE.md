@@ -25,8 +25,9 @@ Devotion system), NOT active glyph drawing during fights.
 - Assets/_MainProject/Scripts/Camera/     — CameraController
 - Assets/_MainProject/Scripts/UI/         — WorldHealthBar, PlayerHUD, DamageNumber, PostureBarUI
 - Assets/_MainProject/Scripts/Editor/     — FixHeroModelHeight (Editor tool only)
-- Assets/_MainProject/Scripts/Skills/     — (Phase 4) SkillData, SkillCaster
-- Assets/_MainProject/Data/Skills/        — (Phase 4) ScriptableObject assets
+- Assets/_MainProject/Scripts/Skills/     — SkillData, SkillCaster, SkillProjectile
+- Assets/_MainProject/Data/Skills/        — Ignis_TraitDeBraise, Ignis_Explosion, Ignis_MurDeFeu, Ignis_Meteore
+- Assets/_MainProject/Prefabs/VFX/Ignis/  — VFX prefabs (particle systems) pour les 4 skills Ignis
 - Assets/_MainProject/Prefabs/            — Player, enemy, effect prefabs
 - Assets/_MainProject/Models/             — HeroCharacter.glb (base), HeroCharacter_Rigged.glb
 - Assets/_MainProject/Models/Animations/  — Hero_Idle.glb, Hero_Walk.glb, Hero_Attack.glb
@@ -236,22 +237,20 @@ Target values to preserve during balancing. Do NOT change without explicit instr
   sprint, StaminaSystem, PlayerHUD
 - **Phase 3**: Enemy Telegraph + Posture/Stagger System — PostureSystem, PostureBarUI,
   EnemyTelegraph (Circle/Cone/FullBoss), StaggerVFX, EnemyAI stagger integration
+- **Phase 4**: First School Ignis — SkillData (ScriptableObject), SkillCaster, SkillProjectile,
+  4 skills actifs (Trait de Braise / Explosion Ignis / Mur de Feu / Météore Ignis),
+  VFX particle systems procéduraux, barre de skills HUD (slots 1–4 avec cooldown overlay),
+  TTK calibration (baseDamage 25, enemyDamage 17, enemyHP 100)
 
 ## Current Phase
-**Phase 4 — First School: Ignis**
+**Phase 5 — Tissage Arcanique**
 
 Remaining:
-- `SkillData` — ScriptableObject base class (name, icon, stamina/cooldown, damage)
-- `SkillCaster` — reads SkillData, resolves cast point, spawns projectile/VFX
-- Ignis skills (4): Trait de Braise, Explosion Ignis, Mur de Feu, Météore Ignis
-- Data assets in `Assets/_MainProject/Data/Skills/`
-
-> TTK calibration (Phase 3 carryover): adjust enemy HP/damage values to match GDD v3.0 targets
-> (see TTK Targets section above) — do before Phase 4 balance testing.
+- 2 proc-slots configurables hors combat
+- 3 triggers : `OnDodge`, `OnKill`, `OnPerfectBlock`
+- Système de devotion style (Grim Dawn) — passif, pas d'action pendant les combats
 
 ## Next Phases
-- **Phase 4**: First school — Ignis (4 active skills: Trait de Braise, Explosion Ignis,
-  Mur de Feu, Météore Ignis) + SkillData ScriptableObject + SkillCaster
 - **Phase 5**: Tissage Arcanique — 2 proc-slots, 3 triggers (OnDodge, OnKill, OnPerfectBlock)
 - **Phase 6**: Basic loot (rarity, affixes, sockets)
 - **Phase 7**: Second school + Couche B synergies (Condition Chains)
