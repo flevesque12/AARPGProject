@@ -234,20 +234,20 @@ Target values to preserve during balancing. Do NOT change without explicit instr
   game feel (hit stop, slowmo, damage numbers, AimIndicator)
 - **Phase 2**: Full Common Skills — dodge with i-frames, perfect block with slowmo, riposte,
   sprint, StaminaSystem, PlayerHUD
+- **Phase 3**: Enemy Telegraph + Posture/Stagger System — PostureSystem, PostureBarUI,
+  EnemyTelegraph (Circle/Cone/FullBoss), StaggerVFX, EnemyAI stagger integration
 
 ## Current Phase
-**Phase 3 — Enemy Telegraph + Posture/Stagger System**
-
-Progress:
-- ✅ `PostureSystem.cs` — created
-- ✅ `RiposteSystem.cs` — posture damage on riposte hit added
-- ✅ `PostureBarUI.cs` — created
+**Phase 4 — First School: Ignis**
 
 Remaining:
-- `EnemyTelegraph` — Circle/Cone/FullBoss visual indicators, LineRenderer on ground
-- `StaggerVFX` — wired to PostureSystem UnityEvents (OnStaggerEnter / OnStaggerExit)
-- `EnemyAI` — check IsStaggered before Attack state; cancel attack coroutine if staggered during windup
-- TTK calibration: adjust HP/damage values to match GDD v3.0 targets (see TTK Targets section above)
+- `SkillData` — ScriptableObject base class (name, icon, stamina/cooldown, damage)
+- `SkillCaster` — reads SkillData, resolves cast point, spawns projectile/VFX
+- Ignis skills (4): Trait de Braise, Explosion Ignis, Mur de Feu, Météore Ignis
+- Data assets in `Assets/_MainProject/Data/Skills/`
+
+> TTK calibration (Phase 3 carryover): adjust enemy HP/damage values to match GDD v3.0 targets
+> (see TTK Targets section above) — do before Phase 4 balance testing.
 
 ## Next Phases
 - **Phase 4**: First school — Ignis (4 active skills: Trait de Braise, Explosion Ignis,

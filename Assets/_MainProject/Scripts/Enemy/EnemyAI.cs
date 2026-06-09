@@ -55,6 +55,9 @@ public class EnemyAI : MonoBehaviour
     private float patrolTimer;
     private Vector3 spawnPosition;
     private bool isAttacking = false;
+    private PostureSystem _posture;
+    private EnemyTelegraph _telegraph;
+    private Coroutine _attackCoroutine;
 
     private void Awake()
     {
@@ -67,18 +70,30 @@ public class EnemyAI : MonoBehaviour
         agent.stoppingDistance = attackRange * 0.8f;
 
         spawnPosition = transform.position;
+        _posture = GetComponent<PostureSystem>();
+        _telegraph = GetComponent<EnemyTelegraph>();
     }
 
     private void OnEnable()
     {
         health.OnDeath += HandleDeath;
         health.OnDamaged += HandleDamaged;
+        if (_posture != null)
+        {
+            _posture.OnStaggerEnter.AddListener(HandleStaggerEnter);
+            _posture.OnStaggerExit.AddListener(HandleStaggerExit);
+        }
     }
 
     private void OnDisable()
     {
         health.OnDeath -= HandleDeath;
         health.OnDamaged -= HandleDamaged;
+        if (_posture != null)
+        {
+            _posture.OnStaggerEnter.RemoveListener(HandleStaggerEnter);
+            _posture.OnStaggerExit.RemoveListener(HandleStaggerExit);
+        }
     }
 
     private void Start()
@@ -93,6 +108,7 @@ public class EnemyAI : MonoBehaviour
     {
         if (CurrentState == EnemyState.Dead) return;
         if (player == null) return;
+        if (_posture != null && _posture.IsStaggered) return;
 
         float distToPlayer = Vector3.Distance(transform.position, player.position);
 
@@ -156,8 +172,8 @@ public class EnemyAI : MonoBehaviour
             return;
         }
 
-        // À portée d'attaque
-        if (distToPlayer <= attackRange)
+        // À portée d'attaque — pas d'entrée en Attack si staggerisé
+        if (distToPlayer <= attackRange && (_posture == null || !_posture.IsStaggered))
         {
             agent.ResetPath();
             ChangeState(EnemyState.Attack);
@@ -183,7 +199,7 @@ public class EnemyAI : MonoBehaviour
         if (isAttacking) return;
 
         // Lancer l'attaque
-        StartCoroutine(PerformAttack());
+        _attackCoroutine = StartCoroutine(PerformAttack());
     }
 
     private System.Collections.IEnumerator PerformAttack()
@@ -191,16 +207,20 @@ public class EnemyAI : MonoBehaviour
         isAttacking = true;
         lastAttackTime = Time.time;
 
-        // Windup (telegraph visuel pour le joueur)
-        // TODO: Animation ou scale-up pour signaler l'attaque
-        Vector3 originalScale = transform.localScale;
-        transform.localScale = originalScale * 1.1f;
+        // Windup — telegraph visuel (remplace l'ancien scale-up)
+        if (_telegraph != null)
+            _telegraph.Telegraph(attackWindup);
 
         yield return new WaitForSeconds(attackWindup);
 
-        transform.localScale = originalScale;
+        // Annulé par stagger pendant le windup (HandleStaggerEnter) — sécurité
+        if (_posture != null && _posture.IsStaggered)
+        {
+            isAttacking = false;
+            _attackCoroutine = null;
+            yield break;
+        }
 
-        // Vérifier que le joueur est encore à portée
         if (player != null && !health.IsDead)
         {
             float dist = Vector3.Distance(transform.position, player.position);
@@ -208,13 +228,12 @@ public class EnemyAI : MonoBehaviour
             {
                 HealthSystem playerHealth = player.GetComponent<HealthSystem>();
                 if (playerHealth != null)
-                {
                     playerHealth.TakeDamage(attackDamage, gameObject);
-                }
             }
         }
 
         isAttacking = false;
+        _attackCoroutine = null;
     }
 
     // === DEATH ===
@@ -251,6 +270,24 @@ public class EnemyAI : MonoBehaviour
         {
             Instantiate(lootPrefab, transform.position + Vector3.up * 0.5f, Quaternion.identity);
         }
+    }
+
+    private void HandleStaggerEnter()
+    {
+        if (_attackCoroutine != null)
+        {
+            StopCoroutine(_attackCoroutine);
+            _attackCoroutine = null;
+            isAttacking = false;
+        }
+        if (_telegraph != null) _telegraph.Cancel();
+        agent.ResetPath();
+        agent.isStopped = true;
+    }
+
+    private void HandleStaggerExit()
+    {
+        agent.isStopped = false;
     }
 
     private void RotateTowardsPlayer()

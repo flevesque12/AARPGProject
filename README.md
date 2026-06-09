@@ -157,7 +157,7 @@ Assets/_MainProject/Scripts/
 |---|---|---|
 | Phase 1 | Movement, enemies, health, PoE2 camera, game feel | Done |
 | Phase 2 | Common Skills — dodge, perfect block, riposte, sprint, StaminaSystem, PlayerHUD | Done |
-| Phase 3 | Enemy telegraphing + Posture/Stagger system | In progress |
+| Phase 3 | Enemy telegraphing + Posture/Stagger system | Done |
 | Phase 4 | First school — Ignis (4 active skills) + SkillData ScriptableObject | Planned |
 | Phase 5 | Tissage Arcanique — 2 proc-slots, 3 triggers (OnDodge, OnKill, OnPerfectBlock) | Planned |
 | Phase 6 | Basic loot (rarity, affixes, sockets) | Planned |

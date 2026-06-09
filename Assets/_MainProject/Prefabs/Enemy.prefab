@@ -19,6 +19,8 @@ GameObject:
   - component: {fileID: 7663787447273453014}
   - component: {fileID: 5441456893622624933}
   - component: {fileID: 368815506451454417}
+  - component: {fileID: 1508005788550336588}
+  - component: {fileID: 2772940690066704851}
   m_Layer: 7
   m_Name: Enemy
   m_TagString: Untagged
@@ -203,6 +205,11 @@ MonoBehaviour:
   flashColor: {r: 1, g: 1, b: 1, a: 1}
   flashDuration: 0.1
   punchScale: 1.2
+  blockHitColor: {r: 0.3, g: 0.6, b: 1, a: 1}
+  perfectBlockColor: {r: 1, g: 0.88, b: 0.25, a: 1}
+  blockBrokenColor: {r: 1, g: 0.15, b: 0.1, a: 1}
+  blockFlashDuration: 0.18
+  perfectBlockPunchScale: 1.35
   deathColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
   deathShrinkDuration: 0.5
 --- !u!114 &7663787447273453014
@@ -244,10 +251,34 @@ MonoBehaviour:
   _damageMultiplierWhenStaggered: 2.5
   OnStaggerEnter:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 2772940690066704851}
+        m_TargetAssemblyTypeName: StaggerVFX, Assembly-CSharp
+        m_MethodName: OnStaggerEnter
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 1
   OnStaggerExit:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 2772940690066704851}
+        m_TargetAssemblyTypeName: StaggerVFX, Assembly-CSharp
+        m_MethodName: OnStaggerExit
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 1
 --- !u!114 &368815506451454417
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -270,3 +301,36 @@ MonoBehaviour:
   _pulseSpeed: 4
   _hideDelay: 3
   _staggerTextDuration: 1
+--- !u!114 &1508005788550336588
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5160285624754998646}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 42c4485a027bfe54cae648275cc06c8c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyTelegraph
+  _defaultType: 0
+  _telegraphRadius: 2
+  _telegraphConeAngle: 60
+  _telegraphLength: 4
+  _lineSegments: 32
+  _lineWidth: 0.07
+--- !u!114 &2772940690066704851
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5160285624754998646}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e68354bc40a8c454e87c9d03cbfbfe38, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StaggerVFX
+  _staggerTint: {r: 1, g: 0.75, b: 0, a: 1}
+  _punchScale: 1.15
+  _punchDuration: 0.12
