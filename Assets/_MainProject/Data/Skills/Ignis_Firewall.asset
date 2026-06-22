@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 97447f87a7774de44a064c6a1a9ec6bf, type: 3}
+  m_Name: Ignis_Firewall
+  m_EditorClassIdentifier: Assembly-CSharp::SkillData
+  skillName: Firewall
+  icon: {fileID: 0}
+  description: Conjures a blazing wall of fire that burns enemies who pass through
+    it.
+  school: 0
+  skillType: 2
+  staminaCost: 25
+  cooldown: 6
+  baseDamage: 10
+  range: 8
+  radius: 3
+  castTime: 0
+  duration: 5
+  tickInterval: 0.5
+  projectileSpeed: 0
+  projectileSize: 0
+  skillColor: {r: 1, g: 0.4, b: 0, a: 1}
+  projectilePrefab: {fileID: 0}
+  impactVFXPrefab: {fileID: 0}
+  zonePrefab: {fileID: 5761512722520789270, guid: aa7dd9dc27c3cb84e8e2da73d02bf87c, type: 3}
