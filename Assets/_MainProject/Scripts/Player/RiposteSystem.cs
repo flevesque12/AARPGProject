@@ -3,9 +3,11 @@ using System.Collections;
 using UnityEngine;
 
 /// <summary>
-/// Système de Riposte — contre-attaque après un Bloc Parfait ou une Esquive réussie.
-/// Socle Commun — disponible pour tout joueur.
-/// Écoute les événements de BlockSystem et DodgeRoll pour ouvrir la fenêtre.
+/// Système de Riposte — contre-attaque après un Bloc Parfait.
+/// Socle Commun v3.1 — v4.0 n'a pas de riposte (voir CLAUDE.md, table Combat) ;
+/// ce système reste en place pour l'instant en parallèle (retrait complet =
+/// item 7 de la roadmap Phase 5), mais l'esquive ne déclenche plus sa fenêtre
+/// (Phase 5 item 4 : DodgeRoll simplifié, plus de couplage esquive → riposte).
 /// </summary>
 public class RiposteSystem : MonoBehaviour
 {
@@ -22,7 +24,6 @@ public class RiposteSystem : MonoBehaviour
 
     [Header("Références")]
     [SerializeField] private BlockSystem blockSystem;
-    [SerializeField] private DodgeRoll dodgeRoll;
 
     // === État ===
     private bool isRiposteWindowOpen;
@@ -40,27 +41,18 @@ public class RiposteSystem : MonoBehaviour
     private void Awake()
     {
         if (blockSystem == null) blockSystem = GetComponent<BlockSystem>();
-        if (dodgeRoll == null) dodgeRoll = GetComponent<DodgeRoll>();
     }
 
     private void OnEnable()
     {
-        // Écouter les événements qui ouvrent la fenêtre de riposte
         if (blockSystem != null)
             blockSystem.OnPerfectBlock += OpenRiposteWindow;
-
-        // L'esquive ouvre aussi la fenêtre (si on esquive DANS le timing d'une attaque)
-        // Pour simplifier le prototype, on ouvre la fenêtre à la fin de chaque esquive
-        if (dodgeRoll != null)
-            dodgeRoll.OnDodgeEnd += OpenRiposteWindow;
     }
 
     private void OnDisable()
     {
         if (blockSystem != null)
             blockSystem.OnPerfectBlock -= OpenRiposteWindow;
-        if (dodgeRoll != null)
-            dodgeRoll.OnDodgeEnd -= OpenRiposteWindow;
     }
 
     /// <summary>

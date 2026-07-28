@@ -51,7 +51,7 @@ public class CreateIgnisAssets
             "Projectile de braise rapide qui traverse les ennemis sur sa trajectoire.",
             SkillSchool.Ignis,
             SkillType.Projectile,
-            stamina: 15f, cooldown: 0.8f,
+            mana:15f, cooldown: 0.8f,
             damage: 35f, range: 10f, radius: 0f,
             castTime: 0f, duration: 0f, tickInterval: 0f,
             projSpeed: 20f, projSize: 0.25f,
@@ -66,7 +66,7 @@ public class CreateIgnisAssets
             "Déclenche une explosion au point visé après un court délai.",
             SkillSchool.Ignis,
             SkillType.AoE,
-            stamina: 25f, cooldown: 2f,
+            mana:25f, cooldown: 2f,
             damage: 55f, range: 8f, radius: 2.5f,
             castTime: 0.35f, duration: 0f, tickInterval: 0f,
             projSpeed: 0f, projSize: 0f,
@@ -81,7 +81,7 @@ public class CreateIgnisAssets
             "Invoque une zone de flammes persistante qui brûle les ennemis à l'intérieur.",
             SkillSchool.Ignis,
             SkillType.PersistentZone,
-            stamina: 30f, cooldown: 5f,
+            mana:30f, cooldown: 5f,
             damage: 12f, range: 8f, radius: 2f,
             castTime: 0f, duration: 4f, tickInterval: 0.4f,
             projSpeed: 0f, projSize: 0f,
@@ -96,7 +96,7 @@ public class CreateIgnisAssets
             "Invoque un météore massif au point visé après un long telegraph.",
             SkillSchool.Ignis,
             SkillType.DelayedAoE,
-            stamina: 40f, cooldown: 8f,
+            mana:40f, cooldown: 8f,
             damage: 120f, range: 10f, radius: 3.5f,
             castTime: 1.2f, duration: 0f, tickInterval: 0f,
             projSpeed: 0f, projSize: 0f,
@@ -108,7 +108,7 @@ public class CreateIgnisAssets
     static SkillData MakeSkill(
         string fileName, string skillName, string desc,
         SkillSchool school, SkillType type,
-        float stamina, float cooldown,
+        float mana, float cooldown,
         float damage, float range, float radius,
         float castTime, float duration, float tickInterval,
         float projSpeed, float projSize,
@@ -119,7 +119,7 @@ public class CreateIgnisAssets
         s.description  = desc;
         s.school       = school;
         s.skillType    = type;
-        s.staminaCost  = stamina;
+        s.manaCost     = mana;
         s.cooldown     = cooldown;
         s.baseDamage   = damage;
         s.range        = range;

@@ -56,7 +56,6 @@ public class EnemyAI : MonoBehaviour
     private float patrolTimer;
     private Vector3 spawnPosition;
     private bool isAttacking = false;
-    private PostureSystem _posture;
     private EnemyTelegraph _telegraph;
     private Coroutine _attackCoroutine;
 
@@ -64,7 +63,6 @@ public class EnemyAI : MonoBehaviour
     private static readonly int SpeedHash = Animator.StringToHash("Speed");
     private static readonly int AttackHash = Animator.StringToHash("Attack");
     private static readonly int HitHash = Animator.StringToHash("Hit");
-    private static readonly int StaggeredHash = Animator.StringToHash("Staggered");
     private static readonly int DeadHash = Animator.StringToHash("Dead");
 
     private void Awake()
@@ -79,7 +77,6 @@ public class EnemyAI : MonoBehaviour
         agent.stoppingDistance = attackRange * 0.8f;
 
         spawnPosition = transform.position;
-        _posture = GetComponent<PostureSystem>();
         _telegraph = GetComponent<EnemyTelegraph>();
     }
 
@@ -87,22 +84,12 @@ public class EnemyAI : MonoBehaviour
     {
         health.OnDeath += HandleDeath;
         health.OnDamaged += HandleDamaged;
-        if (_posture != null)
-        {
-            _posture.OnStaggerEnter.AddListener(HandleStaggerEnter);
-            _posture.OnStaggerExit.AddListener(HandleStaggerExit);
-        }
     }
 
     private void OnDisable()
     {
         health.OnDeath -= HandleDeath;
         health.OnDamaged -= HandleDamaged;
-        if (_posture != null)
-        {
-            _posture.OnStaggerEnter.RemoveListener(HandleStaggerEnter);
-            _posture.OnStaggerExit.RemoveListener(HandleStaggerExit);
-        }
     }
 
     private void Start()
@@ -117,7 +104,6 @@ public class EnemyAI : MonoBehaviour
     {
         if (CurrentState == EnemyState.Dead) return;
         if (player == null) return;
-        if (_posture != null && _posture.IsStaggered) return;
 
         float distToPlayer = Vector3.Distance(transform.position, player.position);
 
@@ -190,8 +176,8 @@ public class EnemyAI : MonoBehaviour
             return;
         }
 
-        // À portée d'attaque — pas d'entrée en Attack si staggerisé
-        if (distToPlayer <= attackRange && (_posture == null || !_posture.IsStaggered))
+        // À portée d'attaque
+        if (distToPlayer <= attackRange)
         {
             agent.ResetPath();
             ChangeState(EnemyState.Attack);
@@ -234,14 +220,6 @@ public class EnemyAI : MonoBehaviour
             _telegraph.Telegraph(attackWindup);
 
         yield return new WaitForSeconds(attackWindup);
-
-        // Annulé par stagger pendant le windup (HandleStaggerEnter) — sécurité
-        if (_posture != null && _posture.IsStaggered)
-        {
-            isAttacking = false;
-            _attackCoroutine = null;
-            yield break;
-        }
 
         if (player != null && !health.IsDead)
         {
@@ -300,32 +278,6 @@ public class EnemyAI : MonoBehaviour
         {
             Instantiate(lootPrefab, transform.position + Vector3.up * 0.5f, Quaternion.identity);
         }
-    }
-
-    private void HandleStaggerEnter()
-    {
-        if (_attackCoroutine != null)
-        {
-            StopCoroutine(_attackCoroutine);
-            _attackCoroutine = null;
-            isAttacking = false;
-        }
-        if (_telegraph != null) _telegraph.Cancel();
-        agent.ResetPath();
-        agent.isStopped = true;
-
-        // Trigger stagger animation
-        if (animator != null)
-            animator.SetBool(StaggeredHash, true);
-    }
-
-    private void HandleStaggerExit()
-    {
-        agent.isStopped = false;
-
-        // Exit stagger animation
-        if (animator != null)
-            animator.SetBool(StaggeredHash, false);
     }
 
     private void RotateTowardsPlayer()

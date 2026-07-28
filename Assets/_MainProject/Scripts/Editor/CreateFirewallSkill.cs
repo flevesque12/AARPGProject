@@ -12,7 +12,7 @@ public class CreateFirewallSkill
         skill.description = "Conjures a blazing wall of fire that burns enemies who pass through it.";
         skill.school = SkillSchool.Ignis;
         skill.skillType = SkillType.PersistentZone;
-        skill.staminaCost = 25f;
+        skill.manaCost = 25f;
         skill.cooldown = 6f;
         skill.baseDamage = 10f;
         skill.range = 8f;

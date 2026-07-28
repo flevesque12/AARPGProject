@@ -2,9 +2,8 @@ using System;
 using System.Collections;
 using UnityEngine;
 
-// Composant Player — gère le cast des 4 slots de skills actifs.
-// Brancher GameInput.skillCaster sur ce composant.
-// Priorité combat : entre attaque de base (4) et sprint (5).
+// Composant Player — gère le cast des 4 slots de skills actifs (coûts en Mana).
+// Appelé par PlayerCombat.TryCastSlot (lui-même branché sur GameInput, touches 1-4).
 public class SkillCaster : MonoBehaviour
 {
     [Header("Slots  (0 = touche 1, 1 = touche 2, 2 = touche 3, 3 = touche 4)")]
@@ -12,8 +11,8 @@ public class SkillCaster : MonoBehaviour
 
     [Header("Références")]
     [SerializeField] private PlayerController _player;
-    [SerializeField] private StaminaSystem _stamina;
-    [SerializeField] private CombatController _combat;
+    [SerializeField] private ManaSystem _mana;
+    [SerializeField] private PlayerCombat _playerCombat;
     [SerializeField] private SprintController _sprint;
     [SerializeField] private LayerMask _enemyLayer;
 
@@ -25,8 +24,8 @@ public class SkillCaster : MonoBehaviour
     private void Awake()
     {
         if (_player == null) _player = GetComponent<PlayerController>();
-        if (_stamina == null) _stamina = GetComponent<StaminaSystem>();
-        if (_combat == null) _combat = GetComponent<CombatController>();
+        if (_mana == null) _mana = GetComponent<ManaSystem>();
+        if (_playerCombat == null) _playerCombat = GetComponent<PlayerCombat>();
         if (_sprint == null) _sprint = GetComponent<SprintController>();
 
         _cooldowns = new float[4];
@@ -43,19 +42,17 @@ public class SkillCaster : MonoBehaviour
         }
     }
 
-    // Appelé par GameInput (touches 1-4)
+    // Appelé par GameInput (touches 1-4), ou par PlayerCombat.TryCastSlot
     public void TryCastSkill(int slotIndex)
     {
-        if (slotIndex < 0 || slotIndex >= 4) return;
-        SkillData skill = _slots[slotIndex];
-        if (skill == null) return;
+        if (!CanCastSlot(slotIndex)) return;
+        if (_playerCombat != null && !_playerCombat.CanAct) return; // bloqué pendant l'esquive
 
-        if (_combat != null && !_combat.CanAct) return;      // bloqué pendant l'esquive
-        if (_cooldowns[slotIndex] > 0f) return;
-        if (_stamina != null && !_stamina.ConsumeStamina(skill.staminaCost)) return;
+        SkillData skill = _slots[slotIndex];
 
         _sprint?.ForceStopSprint();
-        _stamina?.SetInCombat();
+        _mana?.SetInCombat();
+        _mana?.ConsumeMana(skill.manaCost);
         _cooldowns[slotIndex] = skill.cooldown;
         OnCooldownChanged?.Invoke(slotIndex, skill.cooldown, skill.cooldown);
 
@@ -78,6 +75,21 @@ public class SkillCaster : MonoBehaviour
 
     public bool IsReady(int slotIndex) =>
         slotIndex >= 0 && slotIndex < 4 && _cooldowns[slotIndex] <= 0f;
+
+    /// <summary>
+    /// Vrai si le slot a un sort assigné, n'est pas en cooldown, et que le mana
+    /// disponible couvre son coût. Utilisé par PlayerCombat avant de lancer le cast
+    /// (et par la future HUD pour griser les slots inabordables).
+    /// </summary>
+    public bool CanCastSlot(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= 4) return false;
+        SkillData skill = _slots[slotIndex];
+        if (skill == null) return false;
+        if (_cooldowns[slotIndex] > 0f) return false;
+        if (_mana != null && !_mana.HasEnoughMana(skill.manaCost)) return false;
+        return true;
+    }
 
     // ========================================
     // COMPORTEMENTS PAR TYPE

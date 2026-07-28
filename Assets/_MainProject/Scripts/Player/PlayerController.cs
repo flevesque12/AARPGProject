@@ -2,14 +2,26 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// Contrôleur du joueur — Style PoE 2 / Lost Ark.
-/// WASD (ou stick gauche) contrôle le MOUVEMENT.
-/// Souris (ou stick droit) contrôle le FACING (direction du regard/visée).
-/// 
-/// Remplace l'ancien PlayerController basé sur NavMeshAgent.
+/// Mode de facing du joueur : suit le mouvement, ou vise le curseur souris au sol
+/// (activé par PlayerCombat pendant le cast d'un sort — système à venir).
+/// </summary>
+public enum FacingMode
+{
+    Movement,
+    Aim
+}
+
+/// <summary>
+/// Contrôleur du joueur — 3e personne (style Mages of Mystralia).
+/// WASD (ou stick gauche) contrôle le MOUVEMENT, relatif à la caméra.
+/// En FacingMode.Movement (défaut), le joueur fait face à sa direction de déplacement.
+/// En FacingMode.Aim, il fait face au point visé par la souris au sol (pour le cast de sorts).
+/// La caméra elle-même est entièrement pilotée par le jeu (ThirdPersonCamera) — aucun input
+/// souris ne la contrôle, la souris ne sert qu'à la visée.
+///
 /// Utilise CharacterController pour un mouvement direct et réactif.
-/// 
-/// REQUIRES: CharacterController (au lieu de NavMeshAgent)
+///
+/// REQUIRES: CharacterController
 /// </summary>
 [RequireComponent(typeof(CharacterController))]
 public class PlayerController : MonoBehaviour
@@ -22,9 +34,13 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float groundCheckDistance = 0.3f;
 
     [Header("Rotation / Facing")]
-    [SerializeField] private float rotationSpeed = 20f;         // Vitesse de rotation vers la souris
-    [SerializeField] private LayerMask groundLayer;             // Layer du sol pour le raycast souris
-    [SerializeField] private bool instantRotation = false;      // true = snap immédiat vers la souris (style PoE2)
+    [SerializeField] private float rotationSpeed = 12f;         // Vitesse de rotation vers la cible de facing
+    [SerializeField] private bool instantRotation = false;      // true = snap immédiat
+
+    [Header("Visée (FacingMode.Aim)")]
+    [Tooltip("Layer du sol pour le raycast souris. Vide = fallback sur le plan y=0.")]
+    [SerializeField] private LayerMask groundLayer;
+    [SerializeField] private float aimRaycastMaxDistance = 200f;
 
     [Header("Caméra")]
     [SerializeField] private Camera mainCamera;
@@ -42,14 +58,13 @@ public class PlayerController : MonoBehaviour
     private bool isGrounded;
 
     // === État du facing ===
-    private Vector3 aimWorldPosition;      // Position au sol visée par la souris
+    private FacingMode facingMode = FacingMode.Movement;
     private Vector3 facingDirection;        // Direction dans laquelle le joueur regarde
-    private bool hasAimTarget;             // La souris a touché le sol (raycast réussi)
+    private Vector3 aimWorldPosition;       // Point au sol visé par la souris (raycast caméra)
+    private bool hasAimTarget;              // Le raycast souris a touché le sol
 
     // === Input (reçu de GameInput) ===
     private Vector2 moveInput;             // WASD / stick gauche
-    private Vector2 aimInput;              // Stick droit (gamepad)
-    private bool usingGamepad;             // true = stick droit pour viser
 
     // === Locks (les autres systèmes peuvent bloquer le mouvement/rotation) ===
     private bool movementLocked;
@@ -67,9 +82,10 @@ public class PlayerController : MonoBehaviour
     public bool IsMoving => moveInput.sqrMagnitude > 0.01f && !movementLocked;
     public bool IsGrounded => isGrounded;
     public Vector3 FacingDirection => facingDirection;
-    public Vector3 AimWorldPosition => aimWorldPosition;
     public Vector3 MoveDirection => GetWorldMoveDirection();
     public CharacterController Controller => characterController;
+    public FacingMode CurrentFacingMode => facingMode;
+    public Vector3 AimWorldPosition => aimWorldPosition;
 
     // ========================================
     // INITIALISATION
@@ -141,7 +157,6 @@ public class PlayerController : MonoBehaviour
 
     /// <summary>
     /// Convertit l'input WASD/stick en direction world space relative à la caméra.
-    /// Prend en compte l'angle isométrique.
     /// </summary>
     private Vector3 GetWorldMoveDirection()
     {
@@ -167,47 +182,41 @@ public class PlayerController : MonoBehaviour
     }
 
     // ========================================
-    // FACING (Souris / Stick droit)
+    // FACING (mouvement, ou visée souris pendant un cast)
     // ========================================
 
     private void UpdateFacing()
     {
+        // Toujours à jour même en mode Movement : PlayerCombat en aura besoin pour
+        // prévisualiser la visée avant même de basculer en FacingMode.Aim.
+        UpdateAimWorldPosition();
+
         if (rotationLocked) return;
 
         Vector3 newFacing;
 
-        if (usingGamepad && aimInput.sqrMagnitude > 0.1f)
+        if (facingMode == FacingMode.Aim)
         {
-            // === GAMEPAD : stick droit contrôle le facing ===
-            Vector3 camForward = mainCamera.transform.forward;
-            Vector3 camRight = mainCamera.transform.right;
-            camForward.y = 0f;
-            camRight.y = 0f;
-            camForward.Normalize();
-            camRight.Normalize();
-
-            newFacing = (camForward * aimInput.y + camRight * aimInput.x).normalized;
-        }
-        else
-        {
-            // === CLAVIER/SOURIS : souris contrôle le facing ===
-            UpdateMouseAimPosition();
-
             if (!hasAimTarget) return;
 
-            newFacing = (aimWorldPosition - transform.position);
+            newFacing = aimWorldPosition - transform.position;
             newFacing.y = 0f;
-
             if (newFacing.sqrMagnitude < 0.01f) return;
             newFacing.Normalize();
         }
+        else
+        {
+            // Pas d'input de mouvement → garder le dernier facing
+            Vector3 moveDirection = GetWorldMoveDirection();
+            if (moveDirection.sqrMagnitude < 0.01f) return;
+            newFacing = moveDirection.normalized;
+        }
 
-        // Appliquer la rotation
         facingDirection = newFacing;
 
         if (instantRotation)
         {
-            // Snap immédiat (style PoE 2 — le joueur fait toujours face à la souris)
+            // Snap immédiat
             transform.rotation = Quaternion.LookRotation(facingDirection);
         }
         else
@@ -221,30 +230,37 @@ public class PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// Raycast depuis la souris vers le plan du sol pour trouver le point visé.
+    /// Raycast depuis la caméra à travers la position souris jusqu'au sol.
     /// </summary>
-    private void UpdateMouseAimPosition()
+    private void UpdateAimWorldPosition()
     {
+        if (mainCamera == null) { hasAimTarget = false; return; }
+
         Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
 
         // Méthode 1 : Raycast sur le layer du sol
-        if (groundLayer != 0 && Physics.Raycast(ray, out RaycastHit hit, 200f, groundLayer))
+        if (groundLayer != 0 && Physics.Raycast(ray, out RaycastHit hit, aimRaycastMaxDistance, groundLayer))
         {
             aimWorldPosition = hit.point;
             hasAimTarget = true;
-            return;
         }
-
-        // Méthode 2 (fallback) : Intersection avec le plan y=0
-        Plane groundPlane = new Plane(Vector3.up, Vector3.zero);
-        if (groundPlane.Raycast(ray, out float distance))
+        else
         {
-            aimWorldPosition = ray.GetPoint(distance);
-            hasAimTarget = true;
-            return;
+            // Méthode 2 (fallback) : intersection avec le plan y=0
+            Plane groundPlane = new Plane(Vector3.up, Vector3.zero);
+            if (groundPlane.Raycast(ray, out float distance))
+            {
+                aimWorldPosition = ray.GetPoint(distance);
+                hasAimTarget = true;
+            }
+            else
+            {
+                hasAimTarget = false;
+            }
         }
 
-        hasAimTarget = false;
+        if (showDebugGizmos && hasAimTarget)
+            Debug.DrawRay(ray.origin, ray.direction * aimRaycastMaxDistance, Color.yellow);
     }
 
     // ========================================
@@ -290,12 +306,12 @@ public class PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// Input de visée (stick droit, gamepad uniquement). Appelé chaque frame.
+    /// Change le mode de facing (Movement pendant le déplacement libre, Aim pendant
+    /// le cast d'un sort). Appelé par PlayerCombat.
     /// </summary>
-    public void SetAimInput(Vector2 input, bool isGamepad)
+    public void SetFacingMode(FacingMode mode)
     {
-        aimInput = input;
-        usingGamepad = isGamepad;
+        facingMode = mode;
     }
 
     // ========================================
@@ -348,7 +364,7 @@ public class PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// Force une direction de facing (pour la riposte, les cutscenes, etc.)
+    /// Force une direction de facing (pour la visée de sort, les cutscenes, etc.)
     /// </summary>
     public void ForceFacing(Vector3 direction)
     {

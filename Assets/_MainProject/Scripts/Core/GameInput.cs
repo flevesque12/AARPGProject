@@ -1,27 +1,35 @@
+using System;
 using UnityEngine;
 
 /// <summary>
 /// Gestionnaire d'input centralisé — Lit les inputs et les distribue.
 /// Supporte Legacy Input Manager ET New Input System (mode Both).
-/// 
+///
+/// Note : la rotation de la caméra (souris / stick droit) est lue directement
+/// par ThirdPersonCamera, pas par GameInput — le joueur fait face à sa direction
+/// de mouvement (voir PlayerController.UpdateFacing).
+///
+/// Le bloc (v3.1) n'est plus câblé ici — v4.0 n'a pas de bloc, seulement
+/// esquive + positionnement (voir CLAUDE.md, table Combat). BlockSystem/
+/// CombatController restent en place pour l'instant (retrait complet = item 7
+/// de la roadmap Phase 5) mais ne reçoivent plus d'input.
+///
 /// Layout clavier/souris :
 ///   WASD          → Mouvement
-///   Souris        → Visée / Facing
+///   Souris        → Rotation caméra (géré par ThirdPersonCamera)
 ///   Clic gauche   → Attaque
-///   Clic droit    → Skill secondaire (futur)
+///   Clic droit    → Libre (futur skill secondaire)
 ///   Espace        → Esquive
-///   Shift gauche  → Bloc (maintenir)
 ///   Ctrl gauche   → Sprint (maintenir)
-///   1-6           → Skills (futur)
-///   Tab           → Skill tree (futur)
-///   I             → Inventaire (futur)
-///   
+///   1-4           → Sorts (slots du Grimoire, via PlayerCombat)
+///   Tab           → Ouvrir/fermer le Grimoire (OnGrimoireTogglePressed — futur GrimoireUI)
+///   E             → Interagir (OnInteractPressed — futur InteractionController)
+///
 /// Layout manette :
 ///   Stick gauche  → Mouvement
-///   Stick droit   → Visée
+///   Stick droit   → Rotation caméra (géré par ThirdPersonCamera)
 ///   X / Square    → Attaque
 ///   A / Cross     → Esquive
-///   LT            → Bloc (maintenir)
 ///   LB            → Sprint (maintenir)
 ///   RT/RB         → Skills (futur)
 /// </summary>
@@ -30,7 +38,7 @@ public class GameInput : MonoBehaviour
     [Header("Références — Glisser depuis l'Inspector")]
     [SerializeField] private PlayerController playerController;
     [SerializeField] private CombatController combatController;
-    [SerializeField] private SkillCaster skillCaster;
+    [SerializeField] private PlayerCombat playerCombat;
 
     [Header("Sensibilité")]
     [SerializeField] private float gamepadDeadzone = 0.15f;
@@ -44,13 +52,19 @@ public class GameInput : MonoBehaviour
     private float lastGamepadInput;
     private float lastKeyboardInput;
 
+    // === Événements — pas encore de consommateur (GrimoireUI/InteractionController
+    // arrivent en Phase 6/7), mais le contrat d'input est posé dès maintenant. ===
+    public event Action OnGrimoireTogglePressed;
+    public event Action OnInteractPressed;
+
     private void Update()
     {
         DetectInputDevice();
 
         HandleMovementInput();
-        HandleAimInput();
         HandleCombatInput();
+        HandleSpellInput();
+        HandleUIInput();
     }
 
     // ========================================
@@ -142,40 +156,6 @@ public class GameInput : MonoBehaviour
     }
 
     // ========================================
-    // VISÉE / FACING (chaque frame)
-    // ========================================
-
-    private void HandleAimInput()
-    {
-        if (playerController == null) return;
-
-        if (isUsingGamepad)
-        {
-            // Stick droit pour viser
-            Vector2 aim = Vector2.zero;
-            try
-            {
-                aim = new Vector2(
-                    Input.GetAxisRaw("RightStickHorizontal"),
-                    Input.GetAxisRaw("RightStickVertical")
-                );
-            }
-            catch { /* Axe non configuré */ }
-
-            if (aim.magnitude < gamepadAimDeadzone)
-                aim = Vector2.zero;
-
-            playerController.SetAimInput(aim, true);
-        }
-        else
-        {
-            // La souris contrôle le facing — géré directement par PlayerController
-            // via le raycast sur le plan du sol
-            playerController.SetAimInput(Vector2.zero, false);
-        }
-    }
-
-    // ========================================
     // COMBAT (boutons)
     // ========================================
 
@@ -213,22 +193,6 @@ public class GameInput : MonoBehaviour
             if (logInputs) Debug.Log($"[Input] Esquive direction: {moveDir}");
         }
 
-        // === BLOC ===
-        bool blockHeld;
-        if (isUsingGamepad)
-        {
-            // LT (Left Trigger)
-            float lt = 0f;
-            try { lt = Input.GetAxisRaw("LeftTrigger"); } catch { }
-            blockHeld = lt > 0.3f;
-        }
-        else
-        {
-            blockHeld = Input.GetMouseButton(1); // Right Click
-        }
-
-        combatController.OnBlockInput(blockHeld);
-
         // === SPRINT ===
         bool sprintHeld;
         if (isUsingGamepad)
@@ -264,14 +228,38 @@ public class GameInput : MonoBehaviour
             combatController.OnAttackInput();
             if (logInputs) Debug.Log("[Input] Attaque");
         }
+    }
 
-        // === SKILLS (touches 1-4) ===
-        if (skillCaster != null)
+    // ========================================
+    // SORTS (touches 1-4) — indépendant de CombatController
+    // ========================================
+
+    private void HandleSpellInput()
+    {
+        if (playerCombat == null) return;
+
+        if (Input.GetKeyDown(KeyCode.Alpha1)) playerCombat.TryCastSlot(0);
+        if (Input.GetKeyDown(KeyCode.Alpha2)) playerCombat.TryCastSlot(1);
+        if (Input.GetKeyDown(KeyCode.Alpha3)) playerCombat.TryCastSlot(2);
+        if (Input.GetKeyDown(KeyCode.Alpha4)) playerCombat.TryCastSlot(3);
+    }
+
+    // ========================================
+    // UI (Grimoire, interaction) — pas de consommateur encore, événements seulement
+    // ========================================
+
+    private void HandleUIInput()
+    {
+        if (Input.GetKeyDown(KeyCode.Tab))
         {
-            if (Input.GetKeyDown(KeyCode.Alpha1)) skillCaster.TryCastSkill(0);
-            if (Input.GetKeyDown(KeyCode.Alpha2)) skillCaster.TryCastSkill(1);
-            if (Input.GetKeyDown(KeyCode.Alpha3)) skillCaster.TryCastSkill(2);
-            if (Input.GetKeyDown(KeyCode.Alpha4)) skillCaster.TryCastSkill(3);
+            OnGrimoireTogglePressed?.Invoke();
+            if (logInputs) Debug.Log("[Input] Grimoire toggle");
+        }
+
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            OnInteractPressed?.Invoke();
+            if (logInputs) Debug.Log("[Input] Interact");
         }
     }
 }

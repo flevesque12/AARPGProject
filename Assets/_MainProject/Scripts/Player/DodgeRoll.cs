@@ -16,7 +16,7 @@ public class DodgeRoll : MonoBehaviour
     [SerializeField] private float dodgeDistance = 5f;
     [SerializeField] private float dodgeDuration = 0.4f;
     [SerializeField] private float iFrameStart = 0.05f;
-    [SerializeField] private float iFrameDuration = 0.3f;
+    [SerializeField] private float iFrameDuration = 0.2f;       // v4.0 : réduit de 0.3s à 0.2s (CLAUDE.md, Phase 5)
     [SerializeField] private float cooldown = 1.2f;
     [SerializeField] private float staminaCost = 25f;
 

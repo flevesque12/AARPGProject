@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 public enum SkillSchool { Ignis, Aqua, Terra, Ventus, Lux, Umbra, Ferrum }
 public enum SkillType { Projectile, AoE, PersistentZone, DelayedAoE }
@@ -14,7 +15,8 @@ public class SkillData : ScriptableObject
     public SkillType skillType;
 
     [Header("Ressources")]
-    public float staminaCost = 20f;
+    [FormerlySerializedAs("staminaCost")]
+    public float manaCost = 20f;
     public float cooldown = 2f;
 
     [Header("Combat")]
