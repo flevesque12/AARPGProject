@@ -9,15 +9,15 @@ using UnityEngine;
 /// par ThirdPersonCamera, pas par GameInput — le joueur fait face à sa direction
 /// de mouvement (voir PlayerController.UpdateFacing).
 ///
-/// Le bloc (v3.1) n'est plus câblé ici — v4.0 n'a pas de bloc, seulement
-/// esquive + positionnement (voir CLAUDE.md, table Combat). BlockSystem/
-/// CombatController restent en place pour l'instant (retrait complet = item 7
-/// de la roadmap Phase 5) mais ne reçoivent plus d'input.
+/// v4.0 n'a pas de bloc ni d'attaque de base au corps-à-corps (voir CLAUDE.md,
+/// table Combat) — esquive et sprint sont câblés directement sur DodgeRoll et
+/// SprintController, sans CombatController comme intermédiaire (archivé,
+/// Phase 5).
 ///
 /// Layout clavier/souris :
 ///   WASD          → Mouvement
 ///   Souris        → Rotation caméra (géré par ThirdPersonCamera)
-///   Clic gauche   → Attaque
+///   Clic gauche   → Libre (futur cast rapide / Impact form, Phase 6)
 ///   Clic droit    → Libre (futur skill secondaire)
 ///   Espace        → Esquive
 ///   Ctrl gauche   → Sprint (maintenir)
@@ -28,7 +28,6 @@ using UnityEngine;
 /// Layout manette :
 ///   Stick gauche  → Mouvement
 ///   Stick droit   → Rotation caméra (géré par ThirdPersonCamera)
-///   X / Square    → Attaque
 ///   A / Cross     → Esquive
 ///   LB            → Sprint (maintenir)
 ///   RT/RB         → Skills (futur)
@@ -37,7 +36,8 @@ public class GameInput : MonoBehaviour
 {
     [Header("Références — Glisser depuis l'Inspector")]
     [SerializeField] private PlayerController playerController;
-    [SerializeField] private CombatController combatController;
+    [SerializeField] private DodgeRoll dodgeRoll;
+    [SerializeField] private SprintController sprintController;
     [SerializeField] private PlayerCombat playerCombat;
 
     [Header("Sensibilité")]
@@ -156,20 +156,18 @@ public class GameInput : MonoBehaviour
     }
 
     // ========================================
-    // COMBAT (boutons)
+    // COMBAT (esquive + sprint — v4.0 n'a pas d'attaque de base)
     // ========================================
 
     private void HandleCombatInput()
     {
-        if (combatController == null) return;
-
         // === ESQUIVE ===
         bool dodgePressed = Input.GetKeyDown(KeyCode.Space);
 
         // Gamepad : bouton A / Cross
         try { dodgePressed |= Input.GetButtonDown("Jump"); } catch { }
 
-        if (dodgePressed)
+        if (dodgePressed && dodgeRoll != null && dodgeRoll.CanDodge)
         {
             // Direction = là où le joueur pousse le stick/WASD
             Vector2 moveDir = Vector2.zero;
@@ -188,12 +186,17 @@ public class GameInput : MonoBehaviour
                 if (Input.GetKey(KeyCode.A)) moveDir.x -= 1f;
             }
 
-            combatController.OnDodgeInput(moveDir);
+            sprintController?.ForceStopSprint();
+
+            Vector3 dodgeDir = DodgeRoll.GetDodgeDirection(moveDir, Camera.main);
+            dodgeRoll.TryDodge(dodgeDir);
 
             if (logInputs) Debug.Log($"[Input] Esquive direction: {moveDir}");
         }
 
         // === SPRINT ===
+        if (sprintController == null) return;
+
         bool sprintHeld;
         if (isUsingGamepad)
         {
@@ -207,27 +210,7 @@ public class GameInput : MonoBehaviour
             sprintHeld = Input.GetKey(KeyCode.LeftShift);
         }
 
-        combatController.OnSprintInput(sprintHeld);
-
-        // === ATTAQUE ===
-        bool attackPressed;
-        if (isUsingGamepad)
-        {
-            // X / Square
-            bool xButton = false;
-            try { xButton = Input.GetButtonDown("Fire1"); } catch { }
-            attackPressed = xButton;
-        }
-        else
-        {
-            attackPressed = Input.GetMouseButtonDown(0);
-        }
-
-        if (attackPressed)
-        {
-            combatController.OnAttackInput();
-            if (logInputs) Debug.Log("[Input] Attaque");
-        }
+        sprintController.SetSprintInput(sprintHeld);
     }
 
     // ========================================

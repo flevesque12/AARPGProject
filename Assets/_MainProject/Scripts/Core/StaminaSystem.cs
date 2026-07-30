@@ -6,9 +6,8 @@ using UnityEngine;
 /// Fonctionne comme le HealthSystem mais avec régénération automatique.
 /// Attacher au GameObject du joueur.
 /// 
-/// Consommateurs :
+/// Consommateurs (v4.0 — BlockSystem retiré, voir CLAUDE.md Phase 5) :
 ///   - DodgeRoll      → ConsumeStamina(25)
-///   - BlockSystem    → ConsumeStamina(15 par coup bloqué)
 ///   - SprintController → DrainStamina(10/sec)
 ///   - Skills Ferrum  → ConsumeStamina(variable)
 /// </summary>
@@ -102,7 +101,7 @@ public class StaminaSystem : MonoBehaviour
 
     /// <summary>
     /// Tente de consommer de l'endurance. Retourne false si pas assez.
-    /// Utilisé par : DodgeRoll (25), BlockSystem (15/coup), Parade (20), skills Ferrum.
+    /// Utilisé par : DodgeRoll (25), skills Ferrum.
     /// </summary>
     public bool ConsumeStamina(float amount)
     {
@@ -179,8 +178,8 @@ public class StaminaSystem : MonoBehaviour
 
     /// <summary>
     /// Signale que le joueur est en combat (ralentit la regen).
-    /// Appeler depuis CombatController, DodgeRoll, SprintController
-    /// quand le joueur effectue une action de combat.
+    /// Appeler depuis DodgeRoll, SprintController quand le joueur
+    /// effectue une action de combat.
     /// </summary>
     public void SetInCombat()
     {

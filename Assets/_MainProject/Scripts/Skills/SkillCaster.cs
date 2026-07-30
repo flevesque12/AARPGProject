@@ -171,12 +171,7 @@ public class SkillCaster : MonoBehaviour
             HealthSystem hs = hit.GetComponent<HealthSystem>();
             if (hs == null || hs.IsDead) continue;
 
-            PostureSystem ps = hit.GetComponent<PostureSystem>();
-            float dmg = ps != null && ps.IsStaggered
-                ? skill.baseDamage * ps.DamageMultiplierWhenStaggered
-                : skill.baseDamage;
-
-            hs.TakeDamage(dmg);
+            hs.TakeDamage(skill.baseDamage);
         }
     }
 

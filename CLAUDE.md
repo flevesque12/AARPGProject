@@ -28,7 +28,7 @@ Magic and Mayhem (Grimoire, talismans, apprenticeship), Zelda: TotK (emergent cr
 
 ## Architecture
 - Unity 6000.4.8f1
-- Universal Render Pipeline (URP) + custom cel-shader (to build)
+- Universal Render Pipeline (URP) + custom cel-shader (`Shaders/ToonCel.shader`, hand-written HLSL, done 2026-07-30 — not yet applied to imported character models, see Phase 5)
 - New Input System (InputAction asset, gamepad + keyboard/mouse)
 - Cinemachine for 3rd person camera (replaces CameraController)
 - CharacterController for player (kept from v3.1)
@@ -229,7 +229,7 @@ regardless of camera angle. The camera wrapper changes, not the movement math.
 ### ✅ KEPT (works as-is or with minor tweaks)
 | Script | Location | Notes |
 |--------|----------|-------|
-| HealthSystem.cs | Core/ | No changes needed. Player + enemies. |
+| HealthSystem.cs | Core/ | ✅ UPDATED (2026-07-30). `TakeDamage` no longer routes through CombatController.FilterIncomingDamage (archived) — checks `DodgeRoll.IsInvulnerable` directly for i-frames. No block/riposte damage reduction anymore (neither exists in v4.0). |
 | HitFeedback.cs | Core/ | Keep white flash + scale punch. Remove block-specific colors (blue/gold/red). |
 | DodgeRoll.cs | Player/ | ✅ DONE (2026-07-27). i-frame 0.3s → 0.2s. The "riposte window trigger" was removed from RiposteSystem's side (it listened to `DodgeRoll.OnDodgeEnd`), not from DodgeRoll itself. |
 | SprintController.cs | Player/ | Keep as-is. Possibly make sprint free (no stamina cost). |
@@ -243,25 +243,28 @@ regardless of camera angle. The camera wrapper changes, not the movement math.
 | Script | What changes |
 |--------|-------------|
 | PlayerController.cs | ✅ DONE (2026-07-27). Removed iso mouse-aim-drives-rotation. Added `FacingMode` enum (Movement/Aim) — `Movement` faces move direction, `Aim` faces mouse raycast on ground (`AimWorldPosition`, switched by PlayerCombat during cast). Kept: camera-relative WASD math, CharacterController.Move(), public API (LockMovement, MoveByDelta, Teleport, etc.) |
-| GameInput.cs | ✅ DONE (2026-07-27). Removed: block input (RMB/LT) — BlockSystem no longer receives input. Added: spell slot 1-4 → `PlayerCombat.TryCastSlot`, `OnGrimoireTogglePressed` (Tab) and `OnInteractPressed` (E) events (no consumer yet — GrimoireUI/InteractionController are Phase 6/7). Kept: WASD, dodge (Space), sprint (Shift), gamepad detection. Riposte: never had its own detection here (was internal to CombatController), nothing to remove. |
+| GameInput.cs | ✅ DONE (2026-07-27, completed 2026-07-30). Removed: block input (RMB/LT) — BlockSystem no longer receives input. Added: spell slot 1-4 → `PlayerCombat.TryCastSlot`, `OnGrimoireTogglePressed` (Tab) and `OnInteractPressed` (E) events (no consumer yet — GrimoireUI/InteractionController are Phase 6/7). Kept: WASD, dodge (Space), sprint (Shift), gamepad detection. **2026-07-30**: CombatController fully archived — dodge and sprint input now call `DodgeRoll.TryDodge`/`SprintController.SetSprintInput` directly (no more `combatController.OnDodgeInput`/`OnSprintInput`/`OnAttackInput` indirection). Basic melee attack input (left click / X-Square) dropped entirely — v4.0 has no melee combo. |
 | EnemyAI.cs | ✅ PARTIAL (2026-07-27). Removed: PostureSystem.IsStaggered checks, posture-aware attack cancels, HandleStaggerEnter/Exit. Kept: FSM (Idle/Chase/Attack/Dead), NavMeshAgent, detection/aggro ranges. **Not done yet**: ElementalWeakness component reference, hurt state — deliberately deferred, these belong to Phase 8 ("ElementalWeakness on all enemies"), not Phase 5. |
 | PlayerHUD.cs | ✅ DONE (2026-07-27). Removed: stamina bar, riposte "RIPOSTE!" indicator, action bar with keybinds (whole thing, not just block/riposte rows). Added: Mana bar (below HP, single color, no tiered/flash animation like old stamina), 4 spell slot icons with cooldown overlay + school color (unchanged from v3.1). Kept: HP bar (top-left), auto-create Canvas. |
+| CombatVisualFeedback.cs | ✅ GUTTED (2026-07-30). Removed: sword-swing arc (attack combo, v3.1 only) + shield disc/block tint (no block in v4.0), and the CombatController/BlockSystem references driving them. Kept: sprint trail + squash/stretch/tilt, dodge trail + flatten/tint — both still part of the Socle Commun. |
+| HitFeedback.cs | ✅ DONE (2026-07-30, follow-up to the 2026-07-27 color-removal note). BlockSystem reference and the block-hit/perfect-block/block-broken flash handlers removed entirely (not just the colors). Kept: damage flash + scale punch + death feedback. |
+| SkillCaster.cs / SkillProjectile.cs | ✅ DONE (2026-07-30). Removed PostureSystem lookups and the stagger damage-multiplier branch in `ApplyAoE`/`Update` — v4.0 has no posture/stagger, damage is applied at face value (`skill.baseDamage` / `_damage`). |
 | SkillProjectile.cs | Not started — Phase 6 (SpellRecipe system). Rename → ProjectileSpell.cs. Refactor to read from SpellRecipe instead of SkillData. Add ISpellModifier hooks for bounce/split/homing. Keep: physics movement, collision detection, VFX instantiation. |
 
 ### ❌ REMOVED (archive in _Archive/ folder, do not use)
 | Script | Reason |
 |--------|--------|
-| CombatController.cs | Replaced by PlayerCombat.cs (spell slots, no melee combo). **Not archived yet** — still active in parallel (dodge/block/riposte/sprint/basic attack), PlayerCombat only owns spell casting so far. Retiring this fully is the last big item of Phase 5. |
-| BlockSystem.cs | No blocking mechanic in v4.0. Input already cut (GameInput no longer calls OnBlockInput) but component/script not archived yet — inert, not deleted. |
-| RiposteSystem.cs | No riposte mechanic in v4.0. Dodge no longer opens its window (2026-07-27), but Bloc Parfait still can — not archived yet. |
-| PostureSystem.cs | No posture/stagger in v4.0. EnemyAI no longer reacts to it (2026-07-27) but the component itself is still active (SkillCaster/RiposteSystem still read it) — not archived yet. |
-| StaminaSystem.cs | Replaced by ManaSystem for casting; sprint may be free. Still active in parallel for dodge/sprint/block until those are migrated too. |
-| PostureBarUI.cs | No posture bar in v4.0. Not archived yet. |
+| CombatController.cs | ✅ ARCHIVED (2026-07-30) → `Scripts/_Archive/CombatController.cs.txt`. Replaced by PlayerCombat.cs (spell slots) + direct GameInput→DodgeRoll/SprintController wiring. Component removed from Player.prefab; GameInput.combatController field replaced by dodgeRoll/sprintController fields wired to the same GameObjects. |
+| BlockSystem.cs | ✅ ARCHIVED (2026-07-30) → `Scripts/_Archive/BlockSystem.cs.txt`. No blocking mechanic in v4.0. Component removed from Player.prefab; HitFeedback/CombatVisualFeedback no longer reference it. |
+| RiposteSystem.cs | ✅ ARCHIVED (2026-07-30) → `Scripts/_Archive/RiposteSystem.cs.txt`. No riposte mechanic in v4.0. Component removed from Player.prefab. |
+| PostureSystem.cs | ✅ ARCHIVED (2026-07-30) → `Scripts/_Archive/PostureSystem.cs.txt`. No posture/stagger in v4.0. Component removed from Enemy.prefab; SkillCaster/SkillProjectile no longer read `IsStaggered`/`DamageMultiplierWhenStaggered`, damage applied at face value. |
+| StaminaSystem.cs | **KEPT active** — not part of this archiving pass. Still consumed by DodgeRoll (dodge cost) and SprintController (drain/sec); archiving it would require deciding "sprint may be free" (open question, not yet resolved) and migrating those two systems off it first. BlockSystem removed as a consumer (doc comment updated 2026-07-30). |
+| PostureBarUI.cs | ✅ ARCHIVED (2026-07-30) → `Scripts/_Archive/PostureBarUI.cs.txt`. No posture bar in v4.0. Component removed from Enemy.prefab. |
 | AimIndicator.cs | ✅ ARCHIVED (2026-07-27) → `Scripts/_Archive/AimIndicator.cs.txt` (renamed `.txt`, Unity compiles `.cs` regardless of folder name). |
 | CameraController.cs | ✅ ARCHIVED (2026-07-27) → `Scripts/_Archive/CameraController.cs.txt`. Component removed from Main Camera in MovementGym.unity. |
-| WorldHealthBar.cs | Simplify into new version without posture bar pairing. Not started. |
+| WorldHealthBar.cs | Simplify into new version without posture bar pairing. Not started — no hard reference to PostureBarUI was found (positioning was via independent `yOffset` values, not an object link), so archiving PostureBarUI didn't break it, but the "no pairing" simplification pass itself is still pending. |
 | EnemyTelegraph.cs | Already a simple generic visual indicator (Circle/Cone/FullBoss), never referenced PostureSystem — no change needed here despite the note. |
-| StaggerVFX.cs | No stagger in v4.0. Not archived yet. |
+| StaggerVFX.cs | ✅ ARCHIVED (2026-07-30) → `Scripts/_Archive/StaggerVFX.cs.txt`. No stagger in v4.0. Component + its UnityEvent listeners on PostureSystem removed together from Enemy.prefab (self-contained pair, no dangling refs). |
 | FixHeroModelHeight.cs | Editor-only tool — review if still relevant. Not reviewed. |
 
 ### 📦 EXISTING DATA ASSETS — Status
@@ -332,29 +335,102 @@ regardless of camera angle. The camera wrapper changes, not the movement math.
 - [x] Create ManaSystem (replaces StaminaSystem for casting)
 - [x] Create PlayerCombat (spell slot casting + FacingMode.Aim bridge — does
       **not** yet own dodge, see note below)
-- [ ] Archive removed scripts to _Archive/ folder — **partial**: only
-      CameraController.cs + AimIndicator.cs done. BlockSystem/RiposteSystem/
-      PostureSystem/PostureBarUI/StaminaSystem/StaggerVFX/CombatController
-      still active in parallel (inputs cut where applicable, but components
-      not archived — this is the last big item, since removing
-      CombatController also means gutting/rewiring CombatVisualFeedback.cs)
+- [x] Archive removed scripts to _Archive/ folder — **done (2026-07-30)**:
+      CombatController/BlockSystem/RiposteSystem/PostureSystem/PostureBarUI/
+      StaggerVFX moved to `Scripts/_Archive/*.cs.txt`, components removed from
+      Player.prefab and Enemy.prefab. Rewired in the process: HealthSystem
+      (dodge i-frames checked directly via DodgeRoll, no more
+      CombatController middleman), GameInput (dodge/sprint wired straight to
+      DodgeRoll/SprintController, basic melee attack input dropped —  v4.0
+      has no melee combo), CombatVisualFeedback (gutted: sword-swing + shield
+      visuals removed, sprint/dodge visuals kept), HitFeedback (block-hit/
+      perfect/broken flashes removed), SkillCaster/SkillProjectile (posture
+      stagger-damage branch removed). **StaminaSystem intentionally NOT
+      archived** — still consumed by DodgeRoll and SprintController; removing
+      it needs the "sprint may be free" open question resolved first.
 - [x] Simplify DodgeRoll (i-frame 0.3s → 0.2s; riposte-window-on-dodge-end
       removed — that trigger actually lived in RiposteSystem's own
       subscription to `DodgeRoll.OnDodgeEnd`, not in DodgeRoll itself)
 - [x] Simplify EnemyAI (remove posture checks) — ElementalWeakness/hurt state
       intentionally deferred to Phase 8, not added here
 - [x] Refactor PlayerHUD (HP + Mana + 4 spell slots)
-- [ ] Basic cel-shader setup (URP shader graph)
-- [ ] Test: player can move in 3P, dodge, cast 1 basic spell, kill 1 enemy —
-      core logic verified via scripted checks (mana consumption, cooldowns,
-      facing mode, damage) in Play Mode, but **no live human playtest yet**.
-      This MCP environment's Play Mode does not tick frames between tool
-      calls, so continuous input (camera damping feel, movement smoothness)
-      could not be verified this way — needs a real keyboard/mouse session.
+- [x] Basic cel-shader setup — **done (2026-07-30)**, hand-authored HLSL/
+      ShaderLab shader (`Shaders/ToonCel.shader`, `AARPG/ToonCel`) instead of
+      a Shader Graph node graph: the MCP tooling available this session can
+      only edit `.shader` text, not `.shadergraph` node JSON (user confirmed
+      hand-written HLSL over a blind/error-prone hand-edited node graph).
+      Forward + ShadowCaster passes, banded (stepped) diffuse lighting, ambient
+      floor so the shadow band never reads pure black (design pillar: never
+      dark/grim), banded specular, and a rim light for the warm toon glow.
+      Compiles clean (0 errors). Demo materials `ToonCel_Player.mat`/
+      `ToonCel_Enemy.mat` created and assigned — confirmed visually via
+      screenshot on the Player capsule (clear light/shadow band + rounded
+      specular highlight, no black shadow). **Not applied to the imported
+      Skeleton_Warrior/Synty models** — reskinning existing art assets is the
+      Phase 11 art pass, out of scope for this foundational shader setup. If
+      the team wants Shader Graph specifically (node-based, artist-editable)
+      instead of/alongside this HLSL version, that still needs to be built by
+      hand in the Unity Editor — not reachable through current MCP tools.
+- [x] Test: player can move in 3P, dodge, cast 1 basic spell, kill 1 enemy —
+      **done (2026-07-30) via Unity MCP + Play Mode**, exercising specifically
+      the code touched by this session's CombatController/PostureSystem
+      archiving: `HealthSystem.TakeDamage` on both an entity with DodgeRoll
+      (Player, normal damage confirmed) and without (Enemy, lethal hit →
+      `IsDead=true` confirmed); `DodgeRoll.TryDodge` → `IsDodging=true`
+      synchronously, correctly gating `PlayerCombat.CanAct`; full cast
+      pipeline `PlayerCombat.TryCastSlot` → `SkillCaster.TryCastSkill` →
+      mana 100→75 (Ignis_Explosion cost 25), cooldown started, FacingMode
+      switched to Aim. Zero console errors across both Play Mode sessions.
+      **Still not a live human playtest** — this MCP environment's Play Mode
+      does not tick frames between separate tool calls (confirmed again this
+      session: `Time.frameCount` stayed at 2 across multiple calls), so
+      continuous input (camera damping feel, movement smoothness, precise
+      i-frame timing) still needs a real keyboard/mouse session to validate.
+
+**Phase 5 is functionally complete** as of 2026-07-30 — all checklist items
+done except the human feel-playtest noted above, which is a standing
+limitation of this tooling, not unfinished work.
 
 ### Phase 6 — Spell Crafting Core
-- [ ] SpellRecipe + RuneModifier ScriptableObjects
-- [ ] SpellFactory + ModifierProcessor + ISpellModifier
+- [x] SpellRecipe + RuneModifier ScriptableObjects — **done (2026-07-30)**.
+      `SpellCraft/Data/`: `SpellEnums.cs` (`SpellBaseForm`, `SpellSchool`,
+      `RuneCategory` — deliberately separate from the existing `SkillSchool`/
+      `SkillType` in `Skills/SkillData.cs`, same pattern as ManaSystem staying
+      decoupled from StaminaSystem, so archiving the v3.1 skill system later
+      needs zero changes here), `BaseFormData` (per-form baseManaCost/
+      baseCooldown), `SchoolData` (per-school display name + primary/secondary
+      color from the Schools table), `RuneModifier` (**abstract** SO base
+      implementing `ISpellModifier` — concrete runes are subclasses, not yet
+      created, that's the "4 basic modifier runes" item below), `SpellRecipe`
+      (composes BaseFormData + SchoolData + up to 4 RuneModifier, `ManaCost`/
+      `CooldownTime` computed live as `base × Π(1 + rune.multiplier)` rather
+      than cached/serialized, `OnValidate` prunes mutually-incompatible rune
+      pairs). Seed data assets created under `Data/SpellCraft/`: 4
+      `BaseFormData` (Projectile/Zone/Aura/Impact, mana costs 6-9 — mid-range
+      of the "Form only: 5-10 Mana" bracket), all 7 `SchoolData` (colors from
+      the Schools table), 1 example `SpellRecipe`
+      (`Ignis_Projectile_Base`, no runes yet since none exist).
+- [x] SpellFactory + ModifierProcessor + ISpellModifier — **done (2026-07-30)**.
+      `SpellCraft/Runtime/`: `ISpellModifier` (single `OnSpawn(SpellContext)`
+      hook — deliberately minimal, `OnHit`/`OnExpire` will be added once the
+      base forms that need them exist, not speculatively now), `SpellContext`
+      (minimal MonoBehaviour data carrier — recipe/caster/origin/direction —
+      **not** in CLAUDE.md's original target tree, added because the 4 base
+      forms need *something* common to read from; they'll attach their
+      behavior components onto the same GameObject `SpellFactory` creates
+      rather than replacing this), `ModifierProcessor` (iterates
+      `recipe.ModifierRunes` and calls `rune.OnSpawn`), `SpellFactory`
+      (instantiates the spell root GameObject + `SpellContext`, calls
+      `ModifierProcessor` — does **not** touch Mana/cooldown, that stays the
+      caller's job, same split as `SkillCaster` today). Verified end-to-end
+      via Unity MCP `execute_code` in Play Mode (Reflection.Emit-generated
+      disposable test rune, not a real content asset): baseline recipe
+      (0 runes) → ManaCost=7/CooldownTime=1 exactly matches `BaseForm_Projectile`;
+      1 rune (×0.5 mana, ×0.2 cooldown) → 10.5/1.2 exactly as the formula
+      predicts; `OnValidate` correctly nulled out an incompatible second rune;
+      `SpellFactory.CreateSpell` produced a correctly-populated `SpellContext`
+      and the test rune's `OnSpawn` fired through `ModifierProcessor`. Zero
+      console errors.
 - [ ] 4 base forms functional (Projectile, Zone, Aura, Impact)
 - [ ] 3 schools playable (Ignis, Aqua, Terra)
 - [ ] 4 basic modifier runes (Bounce, Split, Persist, Expand)

@@ -103,3 +103,9 @@ ExportedObj/
 *.aab
 *.unitypackage
 *.app
+
+
+# =============================================================================
+# CLAUDE CODE - PARAMÈTRES LOCAUX (propres à chaque poste, permissions/outils)
+# =============================================================================
+.claude/settings.local.json

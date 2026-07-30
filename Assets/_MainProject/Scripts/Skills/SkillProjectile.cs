@@ -43,12 +43,7 @@ public class SkillProjectile : MonoBehaviour
             HealthSystem hs = hit.GetComponent<HealthSystem>();
             if (hs == null || hs.IsDead) continue;
 
-            PostureSystem ps = hit.GetComponent<PostureSystem>();
-            float dmg = ps != null && ps.IsStaggered
-                ? _damage * ps.DamageMultiplierWhenStaggered
-                : _damage;
-
-            hs.TakeDamage(dmg);
+            hs.TakeDamage(_damage);
             _hit = true;
             Destroy(gameObject);
             return;

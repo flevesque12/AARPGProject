@@ -2,10 +2,10 @@ using UnityEngine;
 
 /// <summary>
 /// Orchestrateur de combat v4.0 — cast des sorts (slots 1-4) et pont avec le facing
-/// du joueur. Remplace progressivement CombatController, qui gère encore pour
-/// l'instant dodge/bloc/riposte/sprint/attaque de base (v3.1) en parallèle jusqu'à
-/// sa simplification (Phase 5, items restants). Cette classe ne s'occupe QUE du cast.
-/// Attacher au joueur.
+/// du joueur. CombatController (dodge/bloc/riposte/sprint/attaque de base v3.1) a
+/// été archivé (Phase 5) ; esquive et sprint sont maintenant câblés directement
+/// depuis GameInput vers DodgeRoll/SprintController. Cette classe ne s'occupe QUE
+/// du cast. Attacher au joueur.
 /// </summary>
 public class PlayerCombat : MonoBehaviour
 {

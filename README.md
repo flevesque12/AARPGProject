@@ -1,15 +1,35 @@
-# Classless ARPG — Unity Project (Portfolio)
+# L'Art des Glyphes — Unity Portfolio Project
 
-A low-poly 3D isometric action RPG inspired by **Diablo 2**, **Torchlight**, and **Path of Exile 2**.
-Developed solo in Unity 6, this project serves as an in-depth technical showcase of combat systems, game feel, and event-driven code architecture.
+A toon-fantasy, third-person **spell-crafting** action-adventure inspired by **Mages of
+Mystralia**, **Magicka 2**, **Magic and Mayhem**, and **Zelda: Tears of the Kingdom**.
+Developed solo in Unity 6, this project is a technical showcase of a data-driven spell
+system, event-driven C# architecture, custom shader work, and game feel.
+
+> **Design pivot (mid-project):** this repo started as a dark, isometric Diablo/PoE2-style
+> ARPG with block/riposte/posture combat. Roughly halfway through, the design pivoted to a
+> colorful, third-person spell-crafting adventure — a deliberate reset once the original
+> direction stopped serving the actual gameplay goal. Phase 1–4 below are that earlier
+> iteration; most of their combat systems (block, riposte, posture/stagger) have since been
+> retired in favor of spell-based combat. Kept here as evidence of the iteration, not as
+> the current design.
 
 ---
 
 ## Vision & Concept
 
-Players don't pick a class. Identity emerges freely from the **7 elemental schools** they combine: Ignis, Aqua, Terra, Ventus, Lux, Umbra, Ferrum.
+The player is a young mage who learns magic by **crafting custom spells** — combining a
+base form, an elemental school, and modifier runes in a **Grimoire**. Magic serves combat
+*and* daily life: helping villagers, solving environmental puzzles, exploring ancient
+Libraries.
 
-Combat is modeled directly after **Path of Exile 2**: dodge i-frames, block/riposte, enemy telegraphing, and a posture/stagger system. No real-time glyph-drawing gimmick — every mechanic is built around reading the game and precise timing.
+- **Spell crafting, not a spell menu.** Spells are built (Form + School + Runes), never
+  picked from a list.
+- **Combat is a creative puzzle**, not a reflex test — no block/riposte/posture-bar
+  reaction combat anymore.
+- **Toon fantasy, never dark.** Colorful, warm, cel-shaded — a deliberate contrast to the
+  project's earlier isometric-ARPG direction.
+- Identity emerges from the **7 elemental schools** — Ignis, Aqua, Terra, Ventus, Lux,
+  Umbra, Ferrum — combined through spell crafting rather than picked as a class.
 
 ---
 
@@ -18,11 +38,12 @@ Combat is modeled directly after **Path of Exile 2**: dodge i-frames, block/ripo
 | Component | Choice |
 |---|---|
 | Engine | Unity 6000.4.8f1 |
-| Render pipeline | Universal Render Pipeline (URP) |
+| Render pipeline | Universal Render Pipeline (URP) + hand-written HLSL toon/cel shader |
+| Camera | Cinemachine — fixed-angle top-down, 100% game-controlled (no player input) |
 | Input | New Input System + Legacy (mode Both) |
 | Player movement | CharacterController |
-| Enemy AI | NavMesh + custom state machine |
-| Inter-system communication | C# events (`event Action`) |
+| Enemy AI | NavMeshAgent + custom state machine |
+| Inter-system communication | C# events (`event Action`), ScriptableObjects for design data |
 
 ---
 
@@ -30,86 +51,105 @@ Combat is modeled directly after **Path of Exile 2**: dodge i-frames, block/ripo
 
 ```
 Assets/_MainProject/Scripts/
-├── Core/          — GameInput, HealthSystem, HitFeedback, StaminaSystem
-├── Player/        — PlayerController, CombatController, DodgeRoll,
-│                    BlockSystem, RiposteSystem, SprintController, AimIndicator
-├── Enemy/         — EnemyAI, EnemySpawner, PostureSystem,
-│                    EnemyTelegraph, StaggerVFX
-├── Camera/        — CameraController
-├── UI/            — WorldHealthBar, PlayerHUD, DamageNumber, PostureBarUI
+├── Core/          — GameInput, HealthSystem, HitFeedback, ManaSystem, StaminaSystem
+├── Player/        — PlayerController, PlayerCombat, DodgeRoll, SprintController,
+│                    CombatVisualFeedback
+├── Enemy/         — EnemyAI, EnemySpawner, EnemyTelegraph
+├── Camera/        — ThirdPersonCamera (Cinemachine wrapper)
+├── UI/            — WorldHealthBar, PlayerHUD, DamageNumber
+├── Skills/        — SkillData, SkillCaster, SkillProjectile (v3.1 system, Ignis school —
+│                    still active in parallel while SpellCraft/ takes over, see below)
+├── SpellCraft/    — v4.0 spell-crafting core (Phase 6, in progress)
+│   ├── Data/      — SpellRecipe, RuneModifier (abstract), BaseFormData, SchoolData,
+│   │                SpellEnums
+│   └── Runtime/   — SpellFactory, ModifierProcessor, ISpellModifier, SpellContext
+├── Shaders/       — ToonCel.shader (custom URP cel-shader, hand-written HLSL)
 ├── Editor/        — FixHeroModelHeight (Editor tool only)
-└── Skills/        — (Phase 4) SkillData, SkillCaster
+└── _Archive/      — Retired v3.1 systems, kept for reference (see Progress below)
 ```
 
-**Conventions**: PascalCase for classes/methods, `_camelCase` for private fields, `[SerializeField]` for all Inspector-exposed values, no magic numbers.
+**Conventions**: PascalCase for classes/methods, `_camelCase` for private fields,
+`[SerializeField]`/`[Header]`/`[Tooltip]` for all Inspector-exposed values, no magic
+numbers, no singletons (Inspector-driven dependency injection).
 
 ---
 
 ## Implemented Systems
 
-### Camera — Path of Exile 2 Style
-- Perspective (FOV 38°), configurable pitch angle (`pitchAngle = 60°`)
-- Position computed in code (`rotation × Vector3.back × distance`) — no manual offset
-- Player movement is calculated **relative to the camera**: changing `yawAngle` automatically adapts WASD directions without any hardcoded isometric matrix
+### Camera (ThirdPersonCamera)
+- Cinemachine, top-down elevated angle, **fully game-controlled** — no mouse/stick input
+  drives it at all (mouse is reserved for spell aiming instead)
+- Fixed pitch (50°) in **world space** (`CinemachineFollow.TrackerSettings.BindingMode =
+  WorldSpace`) — position tracks the player with damping, angle never swings around when
+  the player turns
+- `CinemachineRotationComposer` + `CinemachineDeoccluder` for smooth framing and obstacle
+  avoidance
 
 ### Player Movement (PlayerController)
-- `CharacterController` for direct, responsive movement
-- WASD / left stick → move direction; mouse / right stick → facing direction
-- Configurable acceleration/deceleration (`acceleration = 50f`, `deceleration = 40f`)
-- Public API: `LockMovement`, `LockRotation`, `SetSpeedMultiplier`, `MoveByDelta`, `Teleport`, `ForceFacing`
-- Events: `OnMove(direction, speed)`, `OnStopMoving()`, `OnFacingChanged(direction)`
+- `CharacterController`-driven, camera-relative WASD movement (`moveSpeed = 8`,
+  `acceleration = 50`, `deceleration = 40`)
+- Two facing modes: `Movement` (faces move direction, default) and `Aim` (faces the mouse
+  raycast on the ground, driven by `PlayerCombat` during a cast)
+- Public API: `LockMovement`, `LockRotation`, `SetSpeedMultiplier`, `MoveByDelta`,
+  `Teleport`, `SetFacingMode`
 
-### Stamina (StaminaSystem)
-- Shared endurance resource for all combat actions
-- Auto-regen with delay (`regenDelay = 1.5s`), ×3 out of combat
-- Consumers: Dodge (25), Block (15/hit), Sprint (10/sec)
-- Events: `OnStaminaChanged`, `OnStaminaEmpty`, `OnStaminaFull`
-
-### Combat — Strict Priority (CombatController)
-`CombatController` orchestrates 5 systems with a clear priority hierarchy:
-
-| Priority | System |
-|---|---|
-| 1 (highest) | **Dodge** — interrupts everything |
-| 2 | **Riposte** — if window open + attack input |
-| 3 | **Block** — held |
-| 4 | **Basic Attack** — 3-hit combo (+20% on 3rd hit) |
-| 5 | **Sprint** — when nothing else is active |
+### Mana & Stamina
+- `ManaSystem` — the casting resource (`maxMana = 100`, regen with delay, ×3 out-of-combat)
+- `StaminaSystem` — kept for Dodge (25) and Sprint (10/sec) only; Block no longer consumes
+  it (block was removed in the pivot)
 
 ### Dodge (DodgeRoll)
 - Directional dodge toward WASD/stick input, or backward if no direction held
-- **I-frames**: invulnerability from `iFrameStart` (0.05s) to `iFrameStart + iFrameDuration` (0.3s)
+- I-frames: `iFrameStart = 0.05s` → `iFrameStart + iFrameDuration` (0.2s, tightened from
+  0.3s during the pivot)
 - Movement via `PlayerController.MoveByDelta()` + `AnimationCurve` (EaseInOut)
-- Stamina cost: 25 — cooldown: 1.2s
-- Dodge end opens the riposte window
-
-### Block (BlockSystem)
-- **Normal block**: hold Right Click/LT → 60% damage reduction, 120° coverage, 15 stamina/hit
-- **Perfect block**: timed within 0.25s of press → 90% reduction, stamina ÷2, slowmo (`timeScale = 0.15f`, 0.2s real time)
-- Block broken if stamina runs out; attacks from behind bypass the angle check
-
-### Riposte (RiposteSystem)
-- Window opens after: **perfect block** or **dodge end**
-- Duration: 1.0s — damage: ×2 base damage
-- Cone detection (`riposteRange = 3m`, `riposteAngle = 90°`)
-- Successful riposte → slowmo (`timeScale = 0.1f`, 0.15s real time) + posture damage (50% of target's postureMax)
 
 ### Sprint (SprintController)
-- Speed multiplier ×1.6 via `PlayerController.SetSpeedMultiplier()`
-- Costs 10 stamina/sec, requires minimum 15 stamina to start
-- `ForceStopSprint()` called by `CombatController` on dodge/block/attack
+- Speed multiplier ×1.6, 10 stamina/sec, minimum 15 stamina to start
+- Wired directly from `GameInput` (the old `CombatController` middleman was retired)
 
-### Posture / Stagger (PostureSystem)
-- Posture pool on every enemy (60 basic, 120 elite)
-- `DegradePosture(float)` called by `RiposteSystem` and Ferrum skills
-- Stagger → ×2.5 damage multiplier + locks enemy attacks
-- Events: `OnStaggerEnter`, `OnStaggerExit` (UnityEvent, wired to StaggerVFX); `OnPostureChanged` (C# event, subscribed by PostureBarUI)
+### Spell Casting — v3.1 system (Skills/, Ignis school, 4 active skills)
+Still the live in-game casting path while the v4.0 spell-crafting core (below) is built out.
+
+| Skill | Type | Mana | Cooldown | Damage | Notes |
+|---|---|---|---|---|---|
+| Trait de Braise | Projectile | 15 | 0.8s | 35 | Speed 20, OverlapSphere hit detection |
+| Explosion Ignis | AoE | 25 | 2s | 55 | Radius 2.5, 0.35s windup telegraph |
+| Mur de Feu | PersistentZone | 30 | 5s | 12/tick | 4s duration, tick every 0.4s |
+| Météore Ignis | DelayedAoE | 40 | 8s | 120 | Radius 3.5, 1.2s telegraph |
+
+- `SkillCaster` (4 hotkey slots) reads `ManaSystem`, blocked during dodge via
+  `PlayerCombat.CanAct`, bridges `PlayerController.SetFacingMode(Aim)` during the cast
+- All VFX procedural (particle systems built entirely in code, no external assets)
+
+### Spell Crafting Core — v4.0 (SpellCraft/, foundations in progress)
+The system that will replace the table above. Currently: full data schema + instantiation
+pipeline, no gameplay yet.
+
+- `SpellRecipe` (ScriptableObject) — composes a `BaseFormData` + `SchoolData` + up to 4
+  `RuneModifier`; `ManaCost`/`CooldownTime` are **computed properties**
+  (`base × Π(1 + rune.multiplier)`), never stale
+- `RuneModifier` — abstract ScriptableObject base implementing `ISpellModifier`; concrete
+  runes (Bounce, Homing, Split, Persist, …) will be subclasses overriding `OnSpawn`
+- `SpellFactory` + `ModifierProcessor` — builds the spell's root GameObject + `SpellContext`
+  and fires each rune's `OnSpawn` hook
+- Seed data assets: 4 base forms (Projectile/Zone/Aura/Impact), all 7 schools with their
+  palette, one example recipe
+- **Not yet built**: concrete rune behaviors, the 4 base forms' actual visual/physics
+  behavior, the Grimoire crafting UI, environmental synergies
+
+### Custom Cel-Shader (Shaders/ToonCel.shader)
+Hand-written URP HLSL (not Shader Graph — see Progress notes) implementing the toon look:
+- Banded (stepped) diffuse lighting via `smoothstep` on `NdotL × shadowAttenuation`
+- Ambient floor so the shadow band never reads pure black — matches the "never dark, never
+  grim" art direction
+- Banded specular highlight + a warm rim light
+- Full `ForwardLit` + `ShadowCaster` passes
 
 ### Enemy AI (EnemyAI)
-- State machine: `Idle → Chase → Attack → Dead`
-- Optional patrol (random points within `patrolRadius`)
-- Aggro: detection range, lost at `loseAggroRange`, instant aggro if hit while Idle
-- Checks `PostureSystem.IsStaggered` before entering Attack; cancels windup coroutine if staggered mid-attack
+- State machine: `Idle → Chase → Attack → Dead`, `NavMeshAgent`-driven
+- Optional patrol, aggro detection/lose ranges, instant aggro on hit while Idle
+- No more posture/stagger checks (that system was removed in the pivot)
 
 ---
 
@@ -118,75 +158,18 @@ Assets/_MainProject/Scripts/
 | Effect | Implementation |
 |---|---|
 | Hit stop | `Time.timeScale = 0.05f` for 60ms (`WaitForSecondsRealtime`) |
-| Perfect block slowmo | `timeScale = 0.15f`, 0.2s real time |
-| Riposte slowmo | `timeScale = 0.1f`, 0.15s real time |
-| Stagger freeze | `timeScale = 0.05f`, 0.08s on stagger entry |
 | Hit flash | `HitFeedback`: white flash + scale punch (`unscaledDeltaTime` — slowmo-safe) |
-| Block flash | Blue (normal), gold (perfect ×1.35), red (broken) |
 | Damage numbers | `DamageNumber.Spawn()` — TextMesh created entirely in code, no prefab needed |
-| Riposte indicator | `AimIndicator` pulses gold + scales ×1.5 during the riposte window |
+| Dodge/Sprint visuals | `CombatVisualFeedback` — trail renderer + capsule squash/stretch/tint, scoped down to just these two after the pivot (sword-swing and shield visuals removed with the systems they represented) |
 
 ---
 
 ## Player HUD (PlayerHUD)
 - Overlay Canvas created at runtime — no manual scene setup required
-- Health bar (red, centered `current / max` text)
-- Stamina bar: dynamic color green → yellow → red; auto-hides when full (`CanvasGroup`, 3s delay); red flash on insufficient stamina
-- Action bar (bottom-left): live keybinding display
-- Pulsing gold "RIPOSTE !" label during the riposte window
-
----
-
-## Skills System (Phase 4)
-
-### SkillData (ScriptableObject)
-- Reusable data asset for all 7 elemental schools: `school`, `skillType`, `staminaCost`, `cooldown`, `baseDamage`, `range`, `radius`, `castTime`, `duration`, `tickInterval`, `skillColor`
-- Four skill types drive distinct cast behaviors: `Projectile`, `AoE`, `PersistentZone`, `DelayedAoE`
-- VFX fields (`projectilePrefab`, `impactVFXPrefab`, `zonePrefab`) with procedural fallback when null
-
-### SkillCaster (MonoBehaviour — Player)
-- 4 hotkey slots (keys `1`–`4`) mapped to `SkillData` assets
-- Respects combat priority: blocked during dodge (`CombatController.CanAct`), stops sprint on cast
-- Consumes stamina via `StaminaSystem.ConsumeStamina()`, tracks per-slot cooldowns
-- Cast target resolved from `PlayerController.AimWorldPosition`, clamped to `range`
-- Applies `PostureSystem.DamageMultiplierWhenStaggered` on staggered enemies
-- `OnCooldownChanged(slot, remaining, total)` event consumed by `PlayerHUD`
-
-### Ignis School — 4 skills
-
-| Skill | Type | Stamina | Cooldown | Damage | Notes |
-|---|---|---|---|---|---|
-| Trait de Braise | Projectile | 15 | 0.8s | 35 | Speed 20, OverlapSphere hit detection |
-| Explosion Ignis | AoE | 25 | 2s | 55 | Radius 2.5, 0.35s windup telegraph |
-| Mur de Feu | PersistentZone | 30 | 5s | 12/tick | 4s duration, tick every 0.4s |
-| Météore Ignis | DelayedAoE | 40 | 8s | 120 | Radius 3.5, 1.2s telegraph |
-
-### Skill VFX (procedural particle systems)
-- All VFX built entirely in code — no external assets required
-- Trait de Braise: glowing sphere core + billboard particle trail
-- Explosion Ignis: burst of 80 particles + rising ember sub-emitter
-- Mur de Feu: continuous donut-shaped flame emitter, rising particles
-- Météore Ignis: hemispheric blast of 150 particles + 40 gravity-affected rock fragments
-
-### Skill Bar HUD
-- 4 slots centered at screen bottom, school color tint per slot
-- Cooldown overlay: darkens from top, sweeps down as cooldown expires
-- Skill name displayed below each slot
-- Key number (1–4) shown in slot corner
-
----
-
-## TTK Targets (GDD v3.0)
-
-| Element | Target value |
-|---|---|
-| Basic enemy HP | 80–120 |
-| Elite enemy HP | 300–450 |
-| Player base damage | 20–30 per hit |
-| Riposte damage | 50–70 (×2) |
-| Player HP | ~100 (survives 5–6 hits without dodging) |
-| Basic enemy damage | 15–20 |
-| Elite enemy damage | 25–35 |
+- HP bar (top-left) + Mana bar (single color, no tiered flash)
+- 4 spell slot icons with cooldown overlay + school color tint
+- No more stamina bar, riposte indicator, or keybinding action bar (retired with those
+  systems)
 
 ---
 
@@ -194,18 +177,25 @@ Assets/_MainProject/Scripts/
 
 | Phase | Content | Status |
 |---|---|---|
-| Phase 1 | Movement, enemies, health, PoE2 camera, game feel | Done |
-| Phase 2 | Common Skills — dodge, perfect block, riposte, sprint, StaminaSystem, PlayerHUD | Done |
-| Phase 3 | Enemy telegraphing + Posture/Stagger system | Done |
-| Phase 4 | First school — Ignis (4 active skills) + SkillData ScriptableObject | Done |
-| Phase 5 | Tissage Arcanique — 2 proc-slots, 3 triggers (OnDodge, OnKill, OnPerfectBlock) | Planned |
-| Phase 6 | Basic loot (rarity, affixes, sockets) | Planned |
-| Phase 7 | Second school + Layer B synergies (Condition Chains) | Planned |
-| Phase 8 | First complete zone (Caldera) + Rune Gate | Planned |
+| 1 | Core movement, enemy AI, health, isometric PoE2-style camera, game feel | Done (v3.1) |
+| 2 | Common combat — dodge, block/riposte, sprint, stamina, HUD | Done (v3.1) — block/riposte/posture-adjacent pieces retired in the pivot |
+| 3 | Enemy telegraphing + posture/stagger | Done (v3.1) — posture/stagger system retired in the pivot |
+| 4 | First school — Ignis, 4 active skills, SkillData ScriptableObject | Done — still the live casting path |
+| 5 | **Design pivot**: Cinemachine 3rd-person camera, ManaSystem, PlayerCombat, retire CombatController/Block/Riposte/Posture, custom cel-shader | **Done** |
+| 6 | Spell Crafting Core — SpellRecipe/RuneModifier/SpellFactory | **In progress** — data foundations + instantiation pipeline done; base-form behaviors, concrete runes, and Grimoire UI still to come |
+| 7 | Village hub + first Library (dungeon) | Planned |
+| 8 | Spell crafting complete — all 7 schools, 16 runes, synergies, full Grimoire | Planned |
+| 9 | Expanded world — 3 more zones + Libraries | Planned |
+| 10 | Full content — all zones, all Libraries, complete narrative | Planned |
+| 11 | Polish & launch — final art pass, audio, balancing, accessibility | Planned |
 
 ---
 
 ## About
 
-Solo personal project — iterative development with an evolving design document (GDD v3.0).
-Goal: demonstrate mastery of complex combat systems, event-driven C# architecture, and game feel polish in Unity.
+Solo personal project — iterative development with an evolving design document (now GDD
+v4.0). The mid-project pivot from isometric ARPG to third-person spell-crafting adventure
+is intentional and documented above: goal is to demonstrate not just implementation depth,
+but the judgment to recognize when a design direction isn't working and rebuild on top of
+what's still reusable (movement, health, enemy AI, event architecture) rather than starting
+over from zero.

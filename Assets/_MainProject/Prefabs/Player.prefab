@@ -446,10 +446,7 @@ GameObject:
   - component: {fileID: 7867620292484172203}
   - component: {fileID: 6392841490041903415}
   - component: {fileID: 435270273899746333}
-  - component: {fileID: 9219819659801103650}
   - component: {fileID: 2114539416853121731}
-  - component: {fileID: 3022189992993667711}
-  - component: {fileID: 1149624536421669827}
   - component: {fileID: 7560431567832264788}
   - component: {fileID: 1177728379715588851}
   - component: {fileID: 5719718201188061950}
@@ -620,7 +617,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameInput
   playerController: {fileID: 5581066477004991939}
-  combatController: {fileID: 9219819659801103650}
+  dodgeRoll: {fileID: 2114539416853121731}
+  sprintController: {fileID: 7560431567832264788}
   skillCaster: {fileID: 5719718201188061950}
   gamepadDeadzone: 0.15
   gamepadAimDeadzone: 0.25
@@ -650,34 +648,6 @@ CharacterController:
   m_SkinWidth: 0.08
   m_MinMoveDistance: 0.001
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &9219819659801103650
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8494941975882599437}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a071da3589395f146a6cf0c1c1eafdd1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CombatController
-  dodgeRoll: {fileID: 0}
-  blockSystem: {fileID: 0}
-  riposteSystem: {fileID: 0}
-  sprintController: {fileID: 0}
-  staminaSystem: {fileID: 0}
-  baseDamage: 15
-  attackRange: 2.5
-  attackAngle: 80
-  attackCooldown: 0.5
-  maxComboHits: 3
-  comboWindow: 0.8
-  thirdHitBonusDamage: 0.2
-  enemyLayer:
-    serializedVersion: 2
-    m_Bits: 128
-  mainCamera: {fileID: 0}
 --- !u!114 &2114539416853121731
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -722,50 +692,6 @@ MonoBehaviour:
     m_RotationOrder: 4
   staminaSystem: {fileID: 1177728379715588851}
   playerController: {fileID: 5581066477004991939}
---- !u!114 &3022189992993667711
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8494941975882599437}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1e53242befe6d9d4aa6fb8ce63bbd4a7, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BlockSystem
-  blockReduction: 0.6
-  blockAngle: 120
-  staminaCostPerHit: 15
-  perfectBlockWindow: 0.25
-  perfectBlockReduction: 0.9
-  perfectBlockStaminaCostMult: 0.5
-  perfectBlockSlowmoScale: 0.15
-  perfectBlockSlowmoDuration: 0.2
-  staminaSystem: {fileID: 1177728379715588851}
---- !u!114 &1149624536421669827
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8494941975882599437}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 00f534619d26a8f4596c28c7a1c2bd46, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RiposteSystem
-  riposteWindow: 1
-  riposteDamageMultiplier: 2
-  riposteRange: 3
-  riposteAngle: 90
-  enemyLayer:
-    serializedVersion: 2
-    m_Bits: 128
-  riposteSlowmoOnHit: 0.1
-  riposteSlowmoDuration: 0.15
-  blockSystem: {fileID: 3022189992993667711}
-  dodgeRoll: {fileID: 2114539416853121731}
 --- !u!114 &7560431567832264788
 MonoBehaviour:
   m_ObjectHideFlags: 0

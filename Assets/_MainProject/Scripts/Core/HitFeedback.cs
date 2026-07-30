@@ -16,19 +16,11 @@ public class HitFeedback : MonoBehaviour
     [Header("Scale Punch")]
     [SerializeField] private float punchScale = 1.2f;
 
-    [Header("Flash — Bloc")]
-    [SerializeField] private Color blockHitColor = new Color(0.3f, 0.6f, 1f, 1f);
-    [SerializeField] private Color perfectBlockColor = new Color(1f, 0.88f, 0.25f, 1f);
-    [SerializeField] private Color blockBrokenColor = new Color(1f, 0.15f, 0.1f, 1f);
-    [SerializeField] private float blockFlashDuration = 0.18f;
-    [SerializeField] private float perfectBlockPunchScale = 1.35f;
-
     [Header("Death")]
     [SerializeField] private Color deathColor = new Color(0.3f, 0.3f, 0.3f, 1f);
     [SerializeField] private float deathShrinkDuration = 0.5f;
 
     private HealthSystem health;
-    private BlockSystem blockSystem;
     private MaterialPropertyBlock propBlock;
     private Color originalColor;
     private Vector3 originalScale;
@@ -39,7 +31,6 @@ public class HitFeedback : MonoBehaviour
     private void Awake()
     {
         health = GetComponent<HealthSystem>();
-        blockSystem = GetComponent<BlockSystem>();
         propBlock = new MaterialPropertyBlock();
 
         if (modelRenderer == null)
@@ -63,12 +54,6 @@ public class HitFeedback : MonoBehaviour
             health.OnDamaged += OnDamaged;
             health.OnDeath += OnDeath;
         }
-        if (blockSystem != null)
-        {
-            blockSystem.OnBlockHit += OnBlockHit;
-            blockSystem.OnPerfectBlock += OnPerfectBlock;
-            blockSystem.OnBlockBroken += OnBlockBroken;
-        }
     }
 
     private void OnDisable()
@@ -78,33 +63,12 @@ public class HitFeedback : MonoBehaviour
             health.OnDamaged -= OnDamaged;
             health.OnDeath -= OnDeath;
         }
-        if (blockSystem != null)
-        {
-            blockSystem.OnBlockHit -= OnBlockHit;
-            blockSystem.OnPerfectBlock -= OnPerfectBlock;
-            blockSystem.OnBlockBroken -= OnBlockBroken;
-        }
     }
 
     private void OnDamaged(float damage)
     {
         TriggerFlash(flashColor, punchScale, flashDuration);
         DamageNumber.Spawn(transform.position + Vector3.up * 1.2f, damage);
-    }
-
-    private void OnBlockHit(float residualDamage)
-    {
-        TriggerFlash(blockHitColor, punchScale * 0.85f, blockFlashDuration);
-    }
-
-    private void OnPerfectBlock()
-    {
-        TriggerFlash(perfectBlockColor, perfectBlockPunchScale, flashDuration);
-    }
-
-    private void OnBlockBroken()
-    {
-        TriggerFlash(blockBrokenColor, punchScale * 1.1f, flashDuration);
     }
 
     private void TriggerFlash(Color color, float punch, float duration)

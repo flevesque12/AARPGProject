@@ -315,7 +315,7 @@ public class PlayerController : MonoBehaviour
     }
 
     // ========================================
-    // API PUBLIQUE — Locks (appelé par DodgeRoll, BlockSystem, etc.)
+    // API PUBLIQUE — Locks (appelé par DodgeRoll, etc.)
     // ========================================
 
     /// <summary>
