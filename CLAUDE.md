@@ -235,9 +235,86 @@ regardless of camera angle. The camera wrapper changes, not the movement math.
 | SprintController.cs | Player/ | Keep as-is. Possibly make sprint free (no stamina cost). |
 | DamageNumber.cs | UI/ | Keep — fully code-created via DamageNumber.Spawn(), no prefab dependency. |
 | EnemySpawner.cs | Enemy/ | Keep as-is. |
-| HeroCharacter models | Models/ | Keep 3D models (HeroCharacter_Rigged.glb). Restyle with cel-shader. |
-| Animations | Animations/ | Keep Idle/Walk. Attack anim repurposed for casting gesture. |
+| HeroCharacter models | Models/ | ⚠️ SUPERSEDED (2026-07-31) — Player now uses the 3rdParty/ATART Wizard model instead (see note below the table). HeroCharacter_Rigged.glb kept in the project but no longer wired to Player; still a candidate if the team wants a from-scratch (non-3rdParty) hero later. |
+| Animations | Animations/ | HeroAnimator.controller kept in the project but unused by Player (see Wizard swap note below) — never was wired to Player either, this table entry described the Phase 5/6 plan, not something completed. |
 | VFX/Ignis/ prefabs | Prefabs/VFX/ | Keep particle systems. Restyle for toon look (brighter, more stylized). |
+
+**Player visual model swap (2026-07-31)**: the placeholder `Capsule` primitive under
+`Player` (in `MovementGym.unity`) was replaced with an instance of the 3rd-party
+`Assets/3rdParty/ATART/Character/Wizard/Prefabs/Wizard_Lit.prefab` (user request — pick
+a model from `3rdParty/ATART` and use its animations). Humanoid rig, feet-at-origin
+pivot, positioned at local `(0, -1, 0)` under Player so feet land at the
+`CharacterController`'s capsule bottom. The stock Wizard materials use the Standard
+shader (Built-in RP) or a custom `Custom/UnlitShadow` shader — both render pink in
+URP — so 4 new materials were created instead (`Materials/ToonCel_WizardBody/Face/
+Hair/Weapon.mat`, shader `AARPG/ToonCel`, each just wiring the matching Wizard `.tga`
+into `_BaseMap`) — this doubles as applying the Phase 5 cel-shader to an imported
+character model for the first time (previously only on primitive demo materials).
+New `Wizard.controller` (`Animations/`) — a single `Speed` float parameter driving a
+1D blend tree (`Idle1`→0, `Walk_F`→8, `Run`→13, matching `PlayerController.moveSpeed`=8
+and `SprintController.speedMultiplier`=1.6) — assigned to the Animator that lives on
+the nested `Wizard` FBX root (`Player/WizardModel/Wizard`, not on `WizardModel` itself).
+`Animator.applyRootMotion` set to `false` — movement stays 100% owned by
+`PlayerController`'s `CharacterController.Move()`, animations never displace the
+transform. New `PlayerAnimator.cs` (`Scripts/Player/`) reads
+`PlayerController.CurrentSpeed` each frame (smoothed via `Mathf.Lerp`) and feeds it to
+the Animator — single responsibility, no other logic. `CombatVisualFeedback.
+capsuleRenderer`/`capsuleTransform` and `HitFeedback.modelRenderer` were re-pointed
+from the deleted Capsule to `Wizard_Body` (SkinnedMeshRenderer) and `WizardModel`
+(root transform) respectively — both scripts still only tint/scale a single renderer,
+so hit-flash currently only tints the body mesh, not Face/Hair/Weapon (pre-existing
+single-renderer limitation, not new, just more visible now that the model has 4
+separate renderers instead of 1 capsule). Verified via Unity MCP Play Mode (manually driving
+`PlayerController`/`PlayerAnimator`/`SprintController`'s private `Update()` via
+reflection, same frame-ticking limitation noted elsewhere in this doc): Speed param
+tracked `CurrentSpeed` exactly across Idle (0) → Walk (8) → Run (12.8, sprint
+multiplier applied). Zero console errors.
+
+**Cast animation (2026-07-31, same session, follow-up)**: `Wizard.controller` gained a
+`Cast` trigger + `CastSlot` int and 4 new states `Cast_Slot0..3`, each playing one of the
+Wizard's `Skill1-4` clips (one-shot, `Any State` → `Cast_SlotN` on `Cast` + `CastSlot==N`,
+then an exit-time transition — 0.9 through the clip — back to `Locomotion`). Slot→clip is
+a plain index mapping (slot 0-1 = SpellCaster/new pipeline, 2-3 = legacy SkillCaster), not
+tied to spell content — `SpellRecipe` has no visual/animation hint field, so this is the
+only signal available; every recipe in a given slot plays the same gesture regardless of
+its Form/School/Runes. `PlayerCombat` gained `event Action<int> OnSpellCast`, fired in
+`TryCastSlot` right after a cast actually goes through (both branches). `PlayerAnimator`
+subscribes to it (`OnEnable`/`OnDisable`) and sets `CastSlot`/`Cast` — `PlayerCombat` itself
+has no Animator reference, keeping the existing event-driven decoupling (same pattern as
+`DodgeRoll.OnDodgeStart/OnDodgeEnd` → `CombatVisualFeedback`). No movement lock added for
+the cast gesture — `PlayerCombat` never locked movement during cast even before this change,
+so the character can still strafe while the gesture plays; short one-shot clips (0.9-1.4s)
+just finish and blend back to Locomotion. Casting_In/Wait/Out, Attack1-3, Damage_*, Death
+clips are still unused — flagged as available for whenever a channeled-cast, melee, or
+death/hurt-reaction pass is wanted, not started here. Verified via Play Mode (manual
+`Animator.Update()` stepping, same limitation as above): `TryCastSlot(0)` correctly entered
+`Cast_Slot0` and auto-returned to `Locomotion` once the clip finished; `TryCastSlot(3)`
+(legacy `SkillCaster` branch) correctly entered `Cast_Slot3` — confirms `OnSpellCast` fires
+from both branches. Zero console errors.
+
+**Dodge animation (2026-07-31, same session, follow-up)**: `DodgeRoll`'s roll now plays the
+Wizard's `Teleport` clip instead of no animation at all — user's choice over the pack's
+`Sliding` clip (a physical ground-roll didn't fit a robed mage; a blink does, and reads
+better with the existing i-frame invulnerability). `DodgeRoll` gained a public
+`DodgeDuration` getter (was private-only). `Wizard.controller` gained a `Dodge` trigger, a
+`DodgeSpeedMult` float, and a `Dodge` state (`Any State` → `Dodge` on the trigger, snappy
+0.03s blend, then exit-time 0.95 back to `Locomotion`) whose **playback speed is bound to
+`DodgeSpeedMult`** (`AnimatorState.speedParameterActive`) — the `Teleport` clip is 0.867s
+but `dodgeDuration` defaults to 0.4s, so a fixed-speed clip would visibly outlast the actual
+roll. `PlayerAnimator` computes `DodgeSpeedMult = dodgeClipLength / dodgeRoll.DodgeDuration`
+(re-read every dodge, so retuning `dodgeDuration` in the Inspector keeps the animation in
+sync automatically) and fires it from a new `DodgeRoll.OnDodgeStart` subscription — same
+decoupled-event pattern as `OnSpellCast`/`CombatVisualFeedback`, `DodgeRoll` itself has no
+Animator reference. `dodgeClipLength` (0.867) is a plain serialized float on
+`PlayerAnimator`, not read from the clip at runtime — if the `Teleport` clip is ever swapped
+for a different one, that field must be updated by hand to match. The dodge's actual
+movement (`CharacterController` translation via `MoveByDelta`, smooth over `dodgeDuration`)
+was **not** changed to an instant teleport-style position jump — only the visual gesture
+changed, the underlying roll is still a slide-with-i-frames; a true instant-teleport-dodge
+(disable collision, jump position, reappear) would be a separate, bigger design decision.
+Verified via Play Mode: `DodgeSpeedMult` computed exactly `0.867/0.4 = 2.1675` on
+`TryDodge`, `Dodge` state entered, and the Animator correctly auto-returned to `Locomotion`
+once the sped-up clip finished. Zero console errors.
 
 ### 🔄 REFACTORED (core logic preserved, interface changed)
 | Script | What changes |

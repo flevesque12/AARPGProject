@@ -45,6 +45,11 @@ Libraries.
 | Enemy AI | NavMeshAgent + custom state machine |
 | Inter-system communication | C# events (`event Action`), ScriptableObjects for design data |
 
+**Third-party assets**: `Assets/3rdParty/` (currently a single character model pack used
+for the player) is `.gitignore`d and not part of this repo — reimport it from its original
+source after cloning. Everything under `Assets/_MainProject/` (scripts, ScriptableObject
+data, materials, the custom shader) is original work.
+
 ---
 
 ## Code Architecture
@@ -99,6 +104,20 @@ numbers, no singletons (Inspector-driven dependency injection).
 - Public API: `LockMovement`, `LockRotation`, `SetSpeedMultiplier`, `MoveByDelta`,
   `Teleport`, `SetFacingMode`
 
+### Player Model & Animation (PlayerAnimator)
+- Visual: a 3rd-party humanoid model (see *Third-Party Assets* below), reskinned with the
+  project's own hand-written `ToonCel` shader (its stock materials target Built-in RP and
+  render incorrectly under URP)
+- `Wizard.controller` — a single `Speed` float drives a 1D locomotion blend tree
+  (Idle/Walk/Run); `PlayerAnimator` is the **only** script that writes to the `Animator`
+- Two one-shot gestures, both wired through existing C# events rather than any direct
+  Animator coupling in the gameplay scripts:
+  - **Cast** — `PlayerCombat.OnSpellCast(slotIndex)` → a per-slot casting gesture (4
+    distinct animations, one per hotbar slot)
+  - **Dodge** — `DodgeRoll.OnDodgeStart` → a teleport-blink gesture whose *playback speed*
+    is recalculated every dodge (`clipLength / DodgeRoll.DodgeDuration`) so it always
+    matches the actual i-frame window, even if the dodge duration is retuned later
+
 ### Mana & Stamina
 - `ManaSystem` — the casting resource (`maxMana = 100`, regen with delay, ×3 out-of-combat)
 - `StaminaSystem` — kept for Dodge (25) and Sprint (10/sec) only; Block no longer consumes
@@ -109,6 +128,8 @@ numbers, no singletons (Inspector-driven dependency injection).
 - I-frames: `iFrameStart = 0.05s` → `iFrameStart + iFrameDuration` (0.2s, tightened from
   0.3s during the pivot)
 - Movement via `PlayerController.MoveByDelta()` + `AnimationCurve` (EaseInOut)
+- Visual: a teleport-blink gesture rather than a physical roll — see *Player Model &
+  Animation* above
 
 ### Sprint (SprintController)
 - Speed multiplier ×1.6, 10 stamina/sec, minimum 15 stamina to start

@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 /// <summary>
@@ -30,6 +31,9 @@ public class PlayerCombat : MonoBehaviour
 
     /// <summary>Le joueur peut-il agir (lancer un sort) ? Faux pendant l'esquive.</summary>
     public bool CanAct => _dodgeRoll == null || !_dodgeRoll.IsDodging;
+
+    /// <summary>Levé quand un cast part réellement (slot 0-3) — consommé par PlayerAnimator pour le geste de cast.</summary>
+    public event Action<int> OnSpellCast;
 
     private void Awake()
     {
@@ -66,6 +70,7 @@ public class PlayerCombat : MonoBehaviour
             aimTimer = aimHoldDuration;
 
             _spellCaster.TryCastSpell(slotIndex);
+            OnSpellCast?.Invoke(slotIndex);
             return;
         }
 
@@ -75,5 +80,6 @@ public class PlayerCombat : MonoBehaviour
         aimTimer = aimHoldDuration;
 
         _skillCaster.TryCastSkill(slotIndex);
+        OnSpellCast?.Invoke(slotIndex);
     }
 }

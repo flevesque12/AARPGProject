@@ -41,6 +41,7 @@ public class DodgeRoll : MonoBehaviour
     public bool IsDodging => isDodging;
     public bool IsInvulnerable => isInvulnerable;
     public bool CanDodge => !isDodging && !isOnCooldown && staminaSystem.CurrentStamina >= staminaCost;
+    public float DodgeDuration => dodgeDuration;
 
     private void Awake()
     {
