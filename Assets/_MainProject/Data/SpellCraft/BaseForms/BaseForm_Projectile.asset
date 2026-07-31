@@ -16,3 +16,8 @@ MonoBehaviour:
   description: Tire vers l'avant. Attaque a distance, activation a distance.
   baseManaCost: 7
   baseCooldown: 1
+  baseDamage: 30
+  range: 8
+  radius: 2
+  projectileSpeed: 18
+  projectileSize: 0.3

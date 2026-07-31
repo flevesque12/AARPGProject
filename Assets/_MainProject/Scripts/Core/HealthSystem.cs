@@ -19,12 +19,19 @@ public class HealthSystem : MonoBehaviour
     public event Action<float, float> OnHealthChanged;    // (current, max)
     public event Action<float> OnDamaged;                  // (damageAmount)
     public event Action OnDeath;
+    public event Action<float> OnShieldChanged;            // (shieldAmount)
 
     // --- Propriétés ---
     public float CurrentHealth { get; private set; }
     public float MaxHealth => maxHealth;
     public bool IsDead { get; private set; }
     public float HealthPercent => CurrentHealth / maxHealth;
+
+    /// <summary>
+    /// Bouclier absorbant — consommé avant la vie normale dans TakeDamage. Alimenté par
+    /// SpellCraft/Runtime/AuraSpell.cs (forme de base Aura).
+    /// </summary>
+    public float ShieldAmount { get; private set; }
 
     private DodgeRoll _dodgeRoll;
 
@@ -53,6 +60,15 @@ public class HealthSystem : MonoBehaviour
 
         if (_dodgeRoll != null && _dodgeRoll.IsInvulnerable) return; // absorbed by dodge i-frames
 
+        if (ShieldAmount > 0f)
+        {
+            float absorbed = Mathf.Min(ShieldAmount, damage);
+            ShieldAmount -= absorbed;
+            damage -= absorbed;
+            OnShieldChanged?.Invoke(ShieldAmount);
+            if (damage <= 0f) return;
+        }
+
         CurrentHealth = Mathf.Max(0, CurrentHealth - damage);
         OnHealthChanged?.Invoke(CurrentHealth, maxHealth);
         OnDamaged?.Invoke(damage);
@@ -61,6 +77,26 @@ public class HealthSystem : MonoBehaviour
         {
             Die();
         }
+    }
+
+    /// <summary>
+    /// Ajoute (ou remplace, selon l'appelant) un bouclier absorbant. Voir AuraSpell.Init.
+    /// </summary>
+    public void AddShield(float amount)
+    {
+        if (amount <= 0f) return;
+        ShieldAmount += amount;
+        OnShieldChanged?.Invoke(ShieldAmount);
+    }
+
+    /// <summary>
+    /// Retire le bouclier restant (expiration de l'Aura). Voir AuraSpell.ExpireAfter.
+    /// </summary>
+    public void ClearShield()
+    {
+        if (ShieldAmount <= 0f) return;
+        ShieldAmount = 0f;
+        OnShieldChanged?.Invoke(ShieldAmount);
     }
 
     /// <summary>

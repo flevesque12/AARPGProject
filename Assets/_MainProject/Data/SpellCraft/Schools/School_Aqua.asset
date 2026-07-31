@@ -18,3 +18,10 @@ MonoBehaviour:
     glace.'
   primaryColor: {r: 0.15, g: 0.55, b: 0.95, a: 1}
   secondaryColor: {r: 0.55, g: 0.85, b: 1, a: 1}
+  burnDamagePerTick: 5
+  burnDuration: 3
+  burnTickInterval: 1
+  slowMultiplier: 0.5
+  slowDuration: 2.5
+  damageBonusMultiplier: 0.2
+  knockbackForce: 6

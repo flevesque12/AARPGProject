@@ -17,3 +17,10 @@ MonoBehaviour:
   description: 'Degats directs, DoT, AoE. Monde: bruler, faire fondre, chauffer.'
   primaryColor: {r: 1, g: 0.35, b: 0.1, a: 1}
   secondaryColor: {r: 1, g: 0.75, b: 0.3, a: 1}
+  burnDamagePerTick: 5
+  burnDuration: 3
+  burnTickInterval: 1
+  slowMultiplier: 0.5
+  slowDuration: 2.5
+  damageBonusMultiplier: 0.2
+  knockbackForce: 6

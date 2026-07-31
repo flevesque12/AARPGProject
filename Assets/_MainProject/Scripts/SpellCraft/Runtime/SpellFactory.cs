@@ -1,15 +1,15 @@
 using UnityEngine;
 
 // Construit un sort à partir d'une SpellRecipe : instancie le GameObject racine, y attache
-// SpellContext, et applique les runes modificatrices (ModifierProcessor). Le comportement
-// visuel/physique par forme (Projectile/Zone/Aura/Impact) n'existe pas encore — c'est l'item
-// suivant de la roadmap Phase 6 ("4 base forms functional"), qui ajoutera ses composants sur
-// ce même GameObject plutôt que de remplacer SpellContext. Ne gère pas le coût en Mana ni le
-// cooldown — ça reste la responsabilité de l'appelant (futur SpellCaster, qui orchestre le
-// cast comme SkillCaster le fait aujourd'hui pour le système v3.1).
+// SpellContext, applique les runes modificatrices (ModifierProcessor), puis attache le
+// comportement de la forme de base (Projectile/Zone/Aura/Impact — les 4 formes sont
+// implémentées, roadmap Phase 6 "4 base forms functional" terminé le 2026-07-30). Ne gère pas
+// le coût en Mana ni le cooldown — ça reste la responsabilité de l'appelant (futur
+// SpellCaster, qui orchestre le cast comme SkillCaster le fait aujourd'hui pour le système
+// v3.1).
 public static class SpellFactory
 {
-    public static SpellContext CreateSpell(SpellRecipe recipe, GameObject caster, Vector3 origin, Vector3 direction)
+    public static SpellContext CreateSpell(SpellRecipe recipe, GameObject caster, Vector3 origin, Vector3 direction, LayerMask hitLayer)
     {
         if (recipe == null)
         {
@@ -26,7 +26,33 @@ public static class SpellFactory
         context.Initialize(recipe, caster, origin, direction);
 
         ModifierProcessor.ApplyOnSpawn(context);
+        AttachBaseFormBehaviour(context, hitLayer);
 
         return context;
+    }
+
+    private static void AttachBaseFormBehaviour(SpellContext context, LayerMask hitLayer)
+    {
+        if (context.Recipe.baseForm == null)
+        {
+            Debug.LogWarning($"[SpellFactory] '{context.Recipe.spellName}': baseForm is null, no behaviour attached.");
+            return;
+        }
+
+        switch (context.Recipe.baseForm.baseForm)
+        {
+            case SpellBaseForm.Projectile:
+                context.gameObject.AddComponent<ProjectileSpell>().Init(context, hitLayer);
+                break;
+            case SpellBaseForm.Zone:
+                context.gameObject.AddComponent<ZoneSpell>().Init(context, hitLayer);
+                break;
+            case SpellBaseForm.Aura:
+                context.gameObject.AddComponent<AuraSpell>().Init(context);
+                break;
+            case SpellBaseForm.Impact:
+                context.gameObject.AddComponent<ImpactSpell>().Init(context, hitLayer);
+                break;
+        }
     }
 }

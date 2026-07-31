@@ -16,3 +16,10 @@ MonoBehaviour:
   description: Effet de zone au sol. Controle de terrain, pieges, aide environnementale.
   baseManaCost: 9
   baseCooldown: 2
+  baseDamage: 30
+  range: 8
+  radius: 2
+  projectileSpeed: 18
+  projectileSize: 0.3
+  duration: 3
+  tickInterval: 0.5

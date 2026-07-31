@@ -57,12 +57,18 @@ Assets/_MainProject/Scripts/
 ├── Enemy/         — EnemyAI, EnemySpawner, EnemyTelegraph
 ├── Camera/        — ThirdPersonCamera (Cinemachine wrapper)
 ├── UI/            — WorldHealthBar, PlayerHUD, DamageNumber
+├── Grimoire/      — GrimoireUI, CraftingPanel, CraftingNode — draggable node-graph
+│                    spell-crafting UI (v4.0)
 ├── Skills/        — SkillData, SkillCaster, SkillProjectile (v3.1 system, Ignis school —
-│                    still active in parallel while SpellCraft/ takes over, see below)
-├── SpellCraft/    — v4.0 spell-crafting core (Phase 6, in progress)
-│   ├── Data/      — SpellRecipe, RuneModifier (abstract), BaseFormData, SchoolData,
-│   │                SpellEnums
-│   └── Runtime/   — SpellFactory, ModifierProcessor, ISpellModifier, SpellContext
+│                    still active on hotkeys 3-4 while SpellCraft/ owns 1-2, see below)
+├── SpellCraft/    — v4.0 spell-crafting core (Phase 6 — complete)
+│   ├── Data/      — SpellRecipe, RuneModifier (abstract) + 4 concrete runes (Bounce,
+│   │                Split, Persist, Expand), BaseFormData, SchoolData, SpellEnums
+│   ├── Runtime/   — SpellFactory, ModifierProcessor, ISpellModifier, SpellContext,
+│   │                SpellCaster, the 4 base-form behaviors (ProjectileSpell, ZoneSpell,
+│   │                AuraSpell, ImpactSpell), SchoolEffectApplier + status effects
+│   │                (BurnStatus, SlowStatus, Knockback)
+│   └── Synergies/ — EnvironmentState (terrain-effect tracking foundation)
 ├── Shaders/       — ToonCel.shader (custom URP cel-shader, hand-written HLSL)
 ├── Editor/        — FixHeroModelHeight (Editor tool only)
 └── _Archive/      — Retired v3.1 systems, kept for reference (see Progress below)
@@ -109,7 +115,8 @@ numbers, no singletons (Inspector-driven dependency injection).
 - Wired directly from `GameInput` (the old `CombatController` middleman was retired)
 
 ### Spell Casting — v3.1 system (Skills/, Ignis school, 4 active skills)
-Still the live in-game casting path while the v4.0 spell-crafting core (below) is built out.
+Still live on hotkeys 3-4 (a deliberate coexistence with the v4.0 system below, not a
+final keybinding — see Spell Crafting Core).
 
 | Skill | Type | Mana | Cooldown | Damage | Notes |
 |---|---|---|---|---|---|
@@ -122,21 +129,47 @@ Still the live in-game casting path while the v4.0 spell-crafting core (below) i
   `PlayerCombat.CanAct`, bridges `PlayerController.SetFacingMode(Aim)` during the cast
 - All VFX procedural (particle systems built entirely in code, no external assets)
 
-### Spell Crafting Core — v4.0 (SpellCraft/, foundations in progress)
-The system that will replace the table above. Currently: full data schema + instantiation
-pipeline, no gameplay yet.
+### Spell Crafting Core — v4.0 (SpellCraft/) — Phase 6, complete
+The system that replaces the table above, now fully playable end-to-end: craft a spell in
+the Grimoire, save it to a hotbar slot, cast it for real.
 
 - `SpellRecipe` (ScriptableObject) — composes a `BaseFormData` + `SchoolData` + up to 4
   `RuneModifier`; `ManaCost`/`CooldownTime` are **computed properties**
   (`base × Π(1 + rune.multiplier)`), never stale
-- `RuneModifier` — abstract ScriptableObject base implementing `ISpellModifier`; concrete
-  runes (Bounce, Homing, Split, Persist, …) will be subclasses overriding `OnSpawn`
-- `SpellFactory` + `ModifierProcessor` — builds the spell's root GameObject + `SpellContext`
-  and fires each rune's `OnSpawn` hook
-- Seed data assets: 4 base forms (Projectile/Zone/Aura/Impact), all 7 schools with their
-  palette, one example recipe
-- **Not yet built**: concrete rune behaviors, the 4 base forms' actual visual/physics
-  behavior, the Grimoire crafting UI, environmental synergies
+- **4 base forms**, each its own component built by `SpellFactory`:
+  - `ProjectileSpell` — straight-line movement, `OverlapSphere` hit detection, supports
+    Bounce (reflects off the hit target instead of dying) and Split (fans out extra
+    projectiles) via typed accumulators on `SpellContext`
+  - `ZoneSpell` — ground-anchored AoE, damage on a tick timer, leaves a matching terrain
+    patch (`EnvironmentState`) for future environmental-synergy detection
+  - `AuraSpell` — self-cast absorbing shield (`HealthSystem.ShieldAmount`, drained before
+    HP on `TakeDamage`)
+  - `ImpactSpell` — instant melee-range burst, no travel or persistence
+- **3 schools with a signature combat effect** (of 7 total; the rest are currently
+  color/VFX-only): Ignis → burn DoT, Aqua → slows the target's `NavMeshAgent`, Terra →
+  bonus damage + a brief knockback displacement
+- **4 modifier runes** (one per Trajectory/Shape/Time category, minus Interaction):
+  Bounce, Split, Persist (extends duration), Expand (widens radius) — each a small
+  `RuneModifier` subclass overriding a single `OnSpawn` hook
+- `SpellCaster` — the player-side orchestrator (mana gating, cooldowns, aim-target
+  geometry per base form), live on hotkeys 1-2 alongside the legacy `SkillCaster` on 3-4
+- `EnvironmentState` — a static registry of terrain patches left by `ZoneSpell` (e.g. fire
+  on the ground, a water puddle); the synergy *reactions* to these (steam, mud, magma…)
+  are a later phase, this is the tracking foundation
+- **Not yet built**: the remaining 12 modifier runes, the other 4 schools' signature
+  effects, environmental synergy detection/reactions, Spellbook/Rune Encyclopedia/Journal
+  Grimoire panels
+
+### Grimoire UI — draggable node-graph spell crafting (Grimoire/)
+Opens with Tab, locks player movement while open. A genuine node-graph, not a dropdown
+menu — built entirely in code at runtime (no prefabs), same convention as the HUD.
+
+- A central "recipe core" with a live Mana/Cooldown/rune-count preview
+- Palette of draggable nodes: 4 Base Forms, 7 Schools, 4 Runes — drag one onto the core to
+  connect it (Form/School replace any existing connection of the same kind; up to 4 runes
+  stack); drag a connected node away to disconnect it
+- Two "Save to Slot" buttons commit the composed recipe straight into `SpellCaster`'s
+  hotbar, ready to cast immediately
 
 ### Custom Cel-Shader (Shaders/ToonCel.shader)
 Hand-written URP HLSL (not Shader Graph — see Progress notes) implementing the toon look:
@@ -182,7 +215,7 @@ Hand-written URP HLSL (not Shader Graph — see Progress notes) implementing the
 | 3 | Enemy telegraphing + posture/stagger | Done (v3.1) — posture/stagger system retired in the pivot |
 | 4 | First school — Ignis, 4 active skills, SkillData ScriptableObject | Done — still the live casting path |
 | 5 | **Design pivot**: Cinemachine 3rd-person camera, ManaSystem, PlayerCombat, retire CombatController/Block/Riposte/Posture, custom cel-shader | **Done** |
-| 6 | Spell Crafting Core — SpellRecipe/RuneModifier/SpellFactory | **In progress** — data foundations + instantiation pipeline done; base-form behaviors, concrete runes, and Grimoire UI still to come |
+| 6 | Spell Crafting Core — SpellRecipe/RuneModifier/SpellFactory, 4 base forms, 3 schools with signature effects, 4 modifier runes, terrain-effect foundation, playable `SpellCaster`, node-graph Grimoire UI | **Done** |
 | 7 | Village hub + first Library (dungeon) | Planned |
 | 8 | Spell crafting complete — all 7 schools, 16 runes, synergies, full Grimoire | Planned |
 | 9 | Expanded world — 3 more zones + Libraries | Planned |

@@ -17,3 +17,10 @@ MonoBehaviour:
   description: 'Degats lourds, murs. Monde: reparer, construire, deplacer des rochers.'
   primaryColor: {r: 0.45, g: 0.32, b: 0.18, a: 1}
   secondaryColor: {r: 0.4, g: 0.55, b: 0.25, a: 1}
+  burnDamagePerTick: 5
+  burnDuration: 3
+  burnTickInterval: 1
+  slowMultiplier: 0.5
+  slowDuration: 2.5
+  damageBonusMultiplier: 0.2
+  knockbackForce: 6

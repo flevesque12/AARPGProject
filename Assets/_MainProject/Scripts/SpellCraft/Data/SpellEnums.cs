@@ -8,3 +8,10 @@ public enum SpellBaseForm { Projectile, Zone, Aura, Impact }
 public enum SpellSchool { Ignis, Aqua, Terra, Ventus, Lux, Umbra, Ferrum }
 
 public enum RuneCategory { Trajectory, Shape, Time, Interaction }
+
+// Types de terrain laissés au sol par les sorts Zone (voir CLAUDE.md, "Environmental
+// synergies" — Fire/Water/Wind/Shadow/LooseEarth correspondent aux 5 écoles qui marquent le
+// terrain dans le tableau de synergies ; Lux/Ferrum n'en laissent pas). La détection de
+// synergie elle-même (Ignis+eau=Vapeur, etc.) est l'item "Environmental synergies" de la
+// Phase 8 — pas géré ici, cet enum ne sert pour l'instant qu'à EnvironmentState.
+public enum TerrainType { Fire, Water, Wind, Shadow, LooseEarth }

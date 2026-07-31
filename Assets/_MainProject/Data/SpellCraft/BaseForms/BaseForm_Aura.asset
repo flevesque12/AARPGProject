@@ -16,3 +16,10 @@ MonoBehaviour:
   description: Buff sur soi. Bouclier, resistance, buff.
   baseManaCost: 8
   baseCooldown: 3
+  baseDamage: 30
+  range: 8
+  radius: 2
+  projectileSpeed: 18
+  projectileSize: 0.3
+  duration: 3
+  tickInterval: 0.5
