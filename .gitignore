@@ -24,6 +24,10 @@ Assets/3rdParty.meta
 # Asset pipeline v2 cache
 [Aa]sset[Ss]tore-5.x/
 
+# Captures d'écran (Unity MCP manage_camera / outil Screenshot intégré)
+Assets/Screenshots/
+Assets/Screenshots.meta
+
 # Crash dumps et profiler
 sysinfo.txt
 *.stackdump

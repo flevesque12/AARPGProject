@@ -17,4 +17,5 @@ MonoBehaviour:
   baseForm: {fileID: 11400000, guid: 3b46194203cfa7247b66c81eb721e63d, type: 2}
   school: {fileID: 11400000, guid: faf5a1d0766d99542851082ab1b74451, type: 2}
   modifierRunes:
-  - {fileID: 11400000, guid: 27b45b650fbf60d41b0a643b97298f61, type: 2}
+  - rune: {fileID: 11400000, guid: 27b45b650fbf60d41b0a643b97298f61, type: 2}
+    intensity: 1

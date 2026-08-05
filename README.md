@@ -56,7 +56,7 @@ data, materials, the custom shader) is original work.
 
 ```
 Assets/_MainProject/Scripts/
-├── Core/          — GameInput, HealthSystem, HitFeedback, ManaSystem, StaminaSystem
+├── Core/          — GameInput, HealthSystem, HitFeedback, HitStop, ManaSystem, StaminaSystem
 ├── Player/        — PlayerController, PlayerCombat, DodgeRoll, SprintController,
 │                    CombatVisualFeedback
 ├── Enemy/         — EnemyAI, EnemySpawner, EnemyTelegraph
@@ -67,13 +67,15 @@ Assets/_MainProject/Scripts/
 ├── Skills/        — SkillData, SkillCaster, SkillProjectile (v3.1 system, Ignis school —
 │                    still active on hotkeys 3-4 while SpellCraft/ owns 1-2, see below)
 ├── SpellCraft/    — v4.0 spell-crafting core (Phase 6 — complete)
-│   ├── Data/      — SpellRecipe, RuneModifier (abstract) + 4 concrete runes (Bounce,
-│   │                Split, Persist, Expand), BaseFormData, SchoolData, SpellEnums
+│   ├── Data/      — SpellRecipe, RuneSlot (rune + continuous intensity), RuneModifier
+│   │                (abstract) + 4 concrete runes (Bounce, Split, Persist, Expand),
+│   │                BaseFormData, SchoolData, SpellEnums
 │   ├── Runtime/   — SpellFactory, ModifierProcessor, ISpellModifier, SpellContext,
-│   │                SpellCaster, the 4 base-form behaviors (ProjectileSpell, ZoneSpell,
-│   │                AuraSpell, ImpactSpell), SchoolEffectApplier + status effects
-│   │                (BurnStatus, SlowStatus, Knockback)
-│   └── Synergies/ — EnvironmentState (terrain-effect tracking foundation)
+│   │                SpellCaster, SpellImpactVFX (procedural hit-burst), the 4 base-form
+│   │                behaviors (ProjectileSpell, ZoneSpell, AuraSpell, ImpactSpell),
+│   │                SchoolEffectApplier + status effects (BurnStatus, SlowStatus, Knockback)
+│   └── Synergies/ — EnvironmentState (terrain-patch tracking, same-type patches stack in
+│                    intensity instead of duplicating)
 ├── Shaders/       — ToonCel.shader (custom URP cel-shader, hand-written HLSL)
 ├── Editor/        — FixHeroModelHeight (Editor tool only)
 └── _Archive/      — Retired v3.1 systems, kept for reference (see Progress below)
@@ -172,25 +174,36 @@ the Grimoire, save it to a hotbar slot, cast it for real.
 - **4 modifier runes** (one per Trajectory/Shape/Time category, minus Interaction):
   Bounce, Split, Persist (extends duration), Expand (widens radius) — each a small
   `RuneModifier` subclass overriding a single `OnSpawn` hook
+- **Continuous rune tuning** — each equipped rune carries a `RuneSlot.intensity` (0.25×–2×,
+  a slider in the Grimoire) that scales both its effect and its mana/cooldown cost
+  linearly, Elder-Scrolls-spell-altar style, instead of being a fixed on/off toggle. 1.0×
+  reproduces the original fixed-rune values exactly, so nothing already tuned was rebalanced
 - `SpellCaster` — the player-side orchestrator (mana gating, cooldowns, aim-target
   geometry per base form), live on hotkeys 1-2 alongside the legacy `SkillCaster` on 3-4
-- `EnvironmentState` — a static registry of terrain patches left by `ZoneSpell` (e.g. fire
-  on the ground, a water puddle); the synergy *reactions* to these (steam, mud, magma…)
-  are a later phase, this is the tracking foundation
+- `EnvironmentState` — a registry of terrain patches left by `ZoneSpell` (e.g. fire on the
+  ground, a water puddle). Same-type overlapping patches **stack in intensity** (capped)
+  instead of duplicating — re-casting a Zone spell onto ground it already marked deals
+  bonus damage per stack. Full synergy *reactions* between different schools (steam, mud,
+  magma…) are still a later phase; this is the tracking + same-school-stacking foundation
 - **Not yet built**: the remaining 12 modifier runes, the other 4 schools' signature
-  effects, environmental synergy detection/reactions, Spellbook/Rune Encyclopedia/Journal
+  effects, cross-school environmental synergy reactions, Spellbook/Rune Encyclopedia/Journal
   Grimoire panels
 
 ### Grimoire UI — draggable node-graph spell crafting (Grimoire/)
 Opens with Tab, locks player movement while open. A genuine node-graph, not a dropdown
 menu — built entirely in code at runtime (no prefabs), same convention as the HUD.
 
-- A central "recipe core" with a live Mana/Cooldown/rune-count preview
+- A central "recipe core" with a live Mana/Cooldown/rune-count preview, its background
+  tinted toward the selected school's color instead of staying flat neutral gray
 - Palette of draggable nodes: 4 Base Forms, 7 Schools, 4 Runes — drag one onto the core to
   connect it (Form/School replace any existing connection of the same kind; up to 4 runes
-  stack); drag a connected node away to disconnect it
+  stack); drag a connected node away to disconnect it. Each rune node carries its own
+  intensity slider (see *Continuous rune tuning* above)
 - Two "Save to Slot" buttons commit the composed recipe straight into `SpellCaster`'s
   hotbar, ready to cast immediately
+- Motion: nodes ease into their slot with a scale-punch on connect, connector lines grow
+  outward from the core instead of snapping to full length, and the whole panel fades/scales
+  in and out on open/close instead of an instant show/hide
 
 ### Custom Cel-Shader (Shaders/ToonCel.shader)
 Hand-written URP HLSL (not Shader Graph — see Progress notes) implementing the toon look:
@@ -211,10 +224,13 @@ Hand-written URP HLSL (not Shader Graph — see Progress notes) implementing the
 
 | Effect | Implementation |
 |---|---|
-| Hit stop | `Time.timeScale = 0.05f` for 60ms (`WaitForSecondsRealtime`) |
+| Hit stop | `Core/HitStop.cs` — `Time.timeScale` gel (`WaitForSecondsRealtime`-based, slowmo-safe), triggered by `ProjectileSpell`/`ImpactSpell` on a real hit. Deliberately **not** triggered by `ZoneSpell`'s repeated ticks — freezing time every tick would read as a stutter, not a punch |
+| Spell impact VFX | `SpellImpactVFX` — procedural, self-cleaning particle burst tinted by the school's color, generic across all 7 schools (no per-school art needed); fires on every Projectile/Impact hit and every damaging Zone tick |
+| Projectile trail | `TrailRenderer` on `ProjectileSpell`, color-to-transparent gradient — the only base form that travels, so the only one with a trail |
 | Hit flash | `HitFeedback`: white flash + scale punch (`unscaledDeltaTime` — slowmo-safe) |
 | Damage numbers | `DamageNumber.Spawn()` — TextMesh created entirely in code, no prefab needed |
 | Dodge/Sprint visuals | `CombatVisualFeedback` — trail renderer + capsule squash/stretch/tint, scoped down to just these two after the pivot (sword-swing and shield visuals removed with the systems they represented) |
+| Grimoire UI motion | Node connect/disconnect ease + scale-punch, connector lines growing from the core, core panel color tint, panel open/close fade+scale — see *Grimoire UI* above |
 
 ---
 
@@ -236,7 +252,7 @@ Hand-written URP HLSL (not Shader Graph — see Progress notes) implementing the
 | 3 | Enemy telegraphing + posture/stagger | Done (v3.1) — posture/stagger system retired in the pivot |
 | 4 | First school — Ignis, 4 active skills, SkillData ScriptableObject | Done — still the live casting path |
 | 5 | **Design pivot**: Cinemachine 3rd-person camera, ManaSystem, PlayerCombat, retire CombatController/Block/Riposte/Posture, custom cel-shader | **Done** |
-| 6 | Spell Crafting Core — SpellRecipe/RuneModifier/SpellFactory, 4 base forms, 3 schools with signature effects, 4 modifier runes, terrain-effect foundation, playable `SpellCaster`, node-graph Grimoire UI | **Done** |
+| 6 | Spell Crafting Core — SpellRecipe/RuneModifier/SpellFactory, 4 base forms, 3 schools with signature effects, 4 modifier runes, terrain-effect foundation, playable `SpellCaster`, node-graph Grimoire UI | **Done** — later extended with continuous rune-intensity tuning, terrain patch stacking, and a game-feel pass (hit-stop, particle VFX, projectile trails, Grimoire UI motion) |
 | 7 | Village hub + first Library (dungeon) | Planned |
 | 8 | Spell crafting complete — all 7 schools, 16 runes, synergies, full Grimoire | Planned |
 | 9 | Expanded world — 3 more zones + Libraries | Planned |

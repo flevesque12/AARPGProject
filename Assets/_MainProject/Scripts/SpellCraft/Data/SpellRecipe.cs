@@ -16,21 +16,24 @@ public class SpellRecipe : ScriptableObject
     [Header("Composition")]
     public BaseFormData baseForm;
     public SchoolData school;
-    [Tooltip("Maximum 4 runes (voir CLAUDE.md, \"16 modifier runes\").")]
-    public RuneModifier[] modifierRunes = new RuneModifier[0];
+    [Tooltip("Maximum 4 runes (voir CLAUDE.md, \"16 modifier runes\"). Chaque slot porte aussi" +
+        " l'intensité de sa rune (voir RuneSlot.cs, \"continuous tuning\").")]
+    public RuneSlot[] modifierRunes = new RuneSlot[0];
 
-    public RuneModifier[] ModifierRunes => modifierRunes;
+    public RuneSlot[] ModifierRunes => modifierRunes;
 
-    // Coût en Mana : base de la forme × (1 + multiplicateur) de chaque rune, en cascade.
-    // Voir CLAUDE.md table "Mana costs by complexity" pour les fourchettes indicatives.
+    // Coût en Mana : base de la forme × (1 + multiplicateur effectif) de chaque rune, en
+    // cascade. Le multiplicateur effectif est scalé par l'intensité du slot (RuneSlot,
+    // "continuous tuning") — voir CLAUDE.md table "Mana costs by complexity" pour les
+    // fourchettes indicatives à intensité 1.0 (valeur d'auteur).
     public float ManaCost
     {
         get
         {
             float cost = baseForm != null ? baseForm.baseManaCost : 0f;
             if (modifierRunes == null) return cost;
-            foreach (var rune in modifierRunes)
-                if (rune != null) cost *= (1f + rune.manaCostMultiplier);
+            foreach (var slot in modifierRunes)
+                if (slot.rune != null) cost *= (1f + slot.rune.EffectiveManaCostMultiplier(slot.intensity));
             return cost;
         }
     }
@@ -41,8 +44,8 @@ public class SpellRecipe : ScriptableObject
         {
             float cooldown = baseForm != null ? baseForm.baseCooldown : 0f;
             if (modifierRunes == null) return cooldown;
-            foreach (var rune in modifierRunes)
-                if (rune != null) cooldown *= (1f + rune.cooldownMultiplier);
+            foreach (var slot in modifierRunes)
+                if (slot.rune != null) cooldown *= (1f + slot.rune.EffectiveCooldownMultiplier(slot.intensity));
             return cooldown;
         }
     }
@@ -56,16 +59,19 @@ public class SpellRecipe : ScriptableObject
 
         for (int i = 0; i < modifierRunes.Length; i++)
         {
-            var rune = modifierRunes[i];
+            modifierRunes[i].intensity = Mathf.Clamp(modifierRunes[i].intensity, RuneSlot.MinIntensity, RuneSlot.MaxIntensity);
+
+            RuneModifier rune = modifierRunes[i].rune;
             if (rune == null) continue;
 
             for (int j = 0; j < modifierRunes.Length; j++)
             {
-                if (i == j || modifierRunes[j] == null) continue;
-                if (rune.IsIncompatibleWith(modifierRunes[j]))
+                RuneModifier other = modifierRunes[j].rune;
+                if (i == j || other == null) continue;
+                if (rune.IsIncompatibleWith(other))
                 {
-                    Debug.LogWarning($"[SpellRecipe] '{name}': '{rune.runeName}' est incompatible avec '{modifierRunes[j].runeName}' — retiré.", this);
-                    modifierRunes[j] = null;
+                    Debug.LogWarning($"[SpellRecipe] '{name}': '{rune.runeName}' est incompatible avec '{other.runeName}' — retiré.", this);
+                    modifierRunes[j].rune = null;
                 }
             }
         }

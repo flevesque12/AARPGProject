@@ -12,10 +12,10 @@ public abstract class RuneModifier : ScriptableObject, ISpellModifier
     public RuneCategory category;
     [TextArea] public string description;
 
-    [Header("Coût — multiplicateurs appliqués au coût courant du sort")]
-    [Tooltip("Ex: 0.5 = +50% du coût en Mana accumulé jusqu'ici.")]
+    [Header("Coût — multiplicateurs appliqués au coût courant du sort, à intensité 1.0")]
+    [Tooltip("Ex: 0.5 = +50% du coût en Mana accumulé jusqu'ici, à intensité 1.0 (voir RuneSlot).")]
     public float manaCostMultiplier = 0.5f;
-    [Tooltip("Ex: 0.15 = +15% du cooldown accumulé jusqu'ici.")]
+    [Tooltip("Ex: 0.15 = +15% du cooldown accumulé jusqu'ici, à intensité 1.0 (voir RuneSlot).")]
     public float cooldownMultiplier = 0.15f;
 
     [Header("Compatibilité")]
@@ -30,7 +30,14 @@ public abstract class RuneModifier : ScriptableObject, ISpellModifier
         return false;
     }
 
+    // Coût effectif une fois scalé par l'intensité du RuneSlot (voir RuneSlot.cs) — lu par
+    // SpellRecipe.ManaCost/CooldownTime. Linéaire : intensité 1.0 = valeur d'auteur inchangée
+    // (rétrocompatible avec les recettes existantes), 0.25 = 25% du coût, 2.0 = 200%.
+    public float EffectiveManaCostMultiplier(float intensity) => manaCostMultiplier * intensity;
+    public float EffectiveCooldownMultiplier(float intensity) => cooldownMultiplier * intensity;
+
     // Appelé par ModifierProcessor à l'instanciation du sort (SpellFactory.CreateSpell).
-    // No-op par défaut — chaque rune concrète override selon son effet.
-    public virtual void OnSpawn(SpellContext context) { }
+    // No-op par défaut — chaque rune concrète override selon son effet, en scalant son propre
+    // paramètre par `intensity` (1.0 = valeur d'auteur, voir RuneSlot.cs).
+    public virtual void OnSpawn(SpellContext context, float intensity) { }
 }

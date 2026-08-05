@@ -33,7 +33,15 @@ public class ZoneSpell : MonoBehaviour
         _hitLayer = hitLayer;
 
         if (context.Recipe.school != null && EnvironmentState.TryGetTerrainType(context.Recipe.school.school, out TerrainType terrain))
-            EnvironmentState.RegisterPatch(terrain, transform.position, _radius, _duration);
+        {
+            float intensity = EnvironmentState.RegisterPatch(terrain, transform.position, _radius, _duration);
+            // Re-marquer un terrain déjà actif du même type l'intensifie au lieu de simplement
+            // coexister (voir EnvironmentState.RegisterPatch) — +50% dégâts par stack au-delà du
+            // premier, captée une fois à l'Init comme RadiusMultiplier/DurationMultiplier plutôt
+            // que réinterrogée à chaque tick.
+            if (intensity > 1f)
+                _damage *= 1f + (intensity - 1f) * 0.5f;
+        }
 
         BuildVisual();
         StartCoroutine(TickLoop());
@@ -68,6 +76,12 @@ public class ZoneSpell : MonoBehaviour
             float damage = _damage;
             SchoolEffectApplier.Apply(_context.Recipe, hit, hs, transform.position, ref damage);
             hs.TakeDamage(damage);
+
+            // Petit burst par cible touchée, pas de hit-stop (juice pass, voir conversation
+            // "add some juice") : une Zone est un effet soutenu qui tick en continu tant qu'une
+            // cible y reste, geler le temps à chaque tick serait un gel quasi permanent plutôt
+            // qu'un "impact" ponctuel comme Projectile/Impact.
+            SpellImpactVFX.Spawn(hit.ClosestPoint(transform.position), _context.Recipe.school != null ? _context.Recipe.school.primaryColor : Color.white);
         }
     }
 

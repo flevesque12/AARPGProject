@@ -9,7 +9,7 @@ public static class ModifierProcessor
         var runes = context.Recipe.ModifierRunes;
         if (runes == null) return;
 
-        foreach (var rune in runes)
-            rune?.OnSpawn(context);
+        foreach (var slot in runes)
+            slot.rune?.OnSpawn(context, slot.intensity);
     }
 }

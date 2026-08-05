@@ -11,8 +11,10 @@ public class ExpandRune : RuneModifier
     [Tooltip("Multiplicateur appliqué au rayon d'effet. Ex: 1.5 = rayon +50%.")]
     public float radiusMultiplier = 1.5f;
 
-    public override void OnSpawn(SpellContext context)
+    public override void OnSpawn(SpellContext context, float intensity)
     {
-        context.MultiplyRadius(radiusMultiplier);
+        // Même interpolation autour du point neutre 1 que PersistRune — voir son commentaire.
+        float effectiveMultiplier = 1f + (radiusMultiplier - 1f) * intensity;
+        context.MultiplyRadius(effectiveMultiplier);
     }
 }

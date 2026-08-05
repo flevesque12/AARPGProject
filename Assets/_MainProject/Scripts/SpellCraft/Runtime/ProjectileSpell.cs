@@ -101,6 +101,9 @@ public class ProjectileSpell : MonoBehaviour
             SchoolEffectApplier.Apply(_recipe, hit, hs, transform.position, ref damage);
             hs.TakeDamage(damage);
 
+            SpellImpactVFX.Spawn(transform.position, _recipe.school != null ? _recipe.school.primaryColor : Color.white);
+            HitStop.Trigger();
+
             if (_bouncesRemaining > 0)
             {
                 _bouncesRemaining--;
@@ -143,5 +146,33 @@ public class ProjectileSpell : MonoBehaviour
             mpb.SetColor("_Color", color);
             r.SetPropertyBlock(mpb);
         }
+
+        BuildTrail(size, color);
+    }
+
+    // Traînée du projectile — seule forme de base qui se déplace, donc la seule à en avoir une
+    // (juice pass, voir conversation "add some juice"). Sur le GameObject racine (pas le visuel
+    // sphère lui-même) pour ne pas hériter du scale de `size`, qui déformerait la largeur/temps
+    // du trail.
+    private void BuildTrail(float size, Color color)
+    {
+        TrailRenderer trail = gameObject.AddComponent<TrailRenderer>();
+        trail.time = 0.15f;
+        trail.startWidth = size * 0.6f;
+        trail.endWidth = 0f;
+        trail.material = new Material(Shader.Find("Sprites/Default"));
+
+        Color transparent = color;
+        transparent.a = 0f;
+        trail.colorGradient = BuildFadeGradient(color, transparent);
+    }
+
+    private static Gradient BuildFadeGradient(Color from, Color to)
+    {
+        var gradient = new Gradient();
+        gradient.SetKeys(
+            new[] { new GradientColorKey(from, 0f), new GradientColorKey(to, 1f) },
+            new[] { new GradientAlphaKey(from.a, 0f), new GradientAlphaKey(to.a, 1f) });
+        return gradient;
     }
 }

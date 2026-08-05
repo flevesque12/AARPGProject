@@ -15,6 +15,7 @@ public class CraftingPanel : MonoBehaviour
     private const float CoreDropRadius = 150f;
     private const float RingRadius = 180f;
     private const int MaxRunes = 4;
+    private static readonly Color NeutralCoreColor = new Color(0.3f, 0.3f, 0.35f, 1f);
 
     private BaseFormData[] _availableForms;
     private SchoolData[] _availableSchools;
@@ -22,9 +23,11 @@ public class CraftingPanel : MonoBehaviour
     private SpellCaster _spellCaster;
 
     private RectTransform _panelRect;
+    private Image _coreImage;
     private Text _coreText;
     private Text _feedbackText;
     private Coroutine _feedbackRoutine;
+    private Coroutine _coreColorRoutine;
 
     private Vector2 _formSlotPos;
     private Vector2 _schoolSlotPos;
@@ -38,7 +41,7 @@ public class CraftingPanel : MonoBehaviour
 
     private BaseFormData _selectedForm;
     private SchoolData _selectedSchool;
-    private readonly List<RuneModifier> _selectedRunes = new List<RuneModifier>();
+    private readonly List<RuneSlot> _selectedRunes = new List<RuneSlot>();
     private SpellRecipe _previewRecipe;
 
     public void Configure(BaseFormData[] forms, SchoolData[] schools, RuneModifier[] runes, SpellCaster spellCaster)
@@ -90,31 +93,57 @@ public class CraftingPanel : MonoBehaviour
             || System.Array.IndexOf(_connectedRuneNodes, node) >= 0;
 
         if (wasConnected) DisconnectNode(node);
-        else node.ResetToOrigin();
+        else node.AnimateToOrigin();
     }
 
     private void ConnectForm(CraftingNode node)
     {
         if (_connectedFormNode != null && _connectedFormNode != node)
-            _connectedFormNode.ResetToOrigin();
+            _connectedFormNode.AnimateToOrigin();
 
         _connectedFormNode = node;
-        node.NodeRect.anchoredPosition = _formSlotPos;
+        node.AnimateTo(_formSlotPos, true);
         _selectedForm = (BaseFormData)node.Payload;
-        SetLine(0, _formSlotPos);
+        AnimateLineGrow(0, _formSlotPos);
         RefreshPreview();
     }
 
     private void ConnectSchool(CraftingNode node)
     {
         if (_connectedSchoolNode != null && _connectedSchoolNode != node)
-            _connectedSchoolNode.ResetToOrigin();
+            _connectedSchoolNode.AnimateToOrigin();
 
         _connectedSchoolNode = node;
-        node.NodeRect.anchoredPosition = _schoolSlotPos;
+        node.AnimateTo(_schoolSlotPos, true);
         _selectedSchool = (SchoolData)node.Payload;
-        SetLine(1, _schoolSlotPos);
+        AnimateLineGrow(1, _schoolSlotPos);
+        AnimateCoreColor(Color.Lerp(NeutralCoreColor, _selectedSchool.primaryColor, 0.5f));
         RefreshPreview();
+    }
+
+    // Teinte le noyau vers la couleur de l'école sélectionnée au lieu de rester gris neutre en
+    // permanence (juice pass, voir conversation "the UI is boring" — pilier GDD "Toon Fantasy,
+    // colorful, warm"). Lerp à 50% plutôt que la couleur pleine pour garder le texte blanc
+    // lisible par-dessus.
+    private void AnimateCoreColor(Color target)
+    {
+        if (_coreColorRoutine != null) StopCoroutine(_coreColorRoutine);
+        _coreColorRoutine = StartCoroutine(CoreColorRoutine(target));
+    }
+
+    private IEnumerator CoreColorRoutine(Color target)
+    {
+        const float duration = 0.25f;
+        Color start = _coreImage.color;
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            _coreImage.color = Color.Lerp(start, target, Mathf.Clamp01(elapsed / duration));
+            yield return null;
+        }
+        _coreImage.color = target;
+        _coreColorRoutine = null;
     }
 
     private void ConnectRune(CraftingNode node)
@@ -122,7 +151,7 @@ public class CraftingPanel : MonoBehaviour
         for (int i = 0; i < MaxRunes; i++)
         {
             if (_connectedRuneNodes[i] != node) continue;
-            node.NodeRect.anchoredPosition = _runeSlotPositions[i]; // déjà connectée, on remet juste en place
+            node.AnimateTo(_runeSlotPositions[i], false); // déjà connectée, on remet juste en place
             return;
         }
 
@@ -130,13 +159,13 @@ public class CraftingPanel : MonoBehaviour
         if (freeSlot < 0)
         {
             ShowFeedback("Maximum 4 runes.");
-            node.ResetToOrigin();
+            node.AnimateToOrigin();
             return;
         }
 
         _connectedRuneNodes[freeSlot] = node;
-        node.NodeRect.anchoredPosition = _runeSlotPositions[freeSlot];
-        SetLine(2 + freeSlot, _runeSlotPositions[freeSlot]);
+        node.AnimateTo(_runeSlotPositions[freeSlot], true);
+        AnimateLineGrow(2 + freeSlot, _runeSlotPositions[freeSlot]);
         RebuildSelectedRunes();
         RefreshPreview();
     }
@@ -154,6 +183,7 @@ public class CraftingPanel : MonoBehaviour
             _connectedSchoolNode = null;
             _selectedSchool = null;
             HideLine(1);
+            AnimateCoreColor(NeutralCoreColor);
         }
         else
         {
@@ -166,7 +196,7 @@ public class CraftingPanel : MonoBehaviour
             RebuildSelectedRunes();
         }
 
-        node.ResetToOrigin();
+        node.AnimateToOrigin();
         RefreshPreview();
     }
 
@@ -174,7 +204,17 @@ public class CraftingPanel : MonoBehaviour
     {
         _selectedRunes.Clear();
         foreach (var node in _connectedRuneNodes)
-            if (node != null) _selectedRunes.Add((RuneModifier)node.Payload);
+            if (node != null) _selectedRunes.Add(new RuneSlot((RuneModifier)node.Payload, node.Intensity));
+    }
+
+    // Callback du slider d'intensité d'un nœud rune (voir AttachIntensitySlider) — la rune
+    // équipée n'a pas changé, seule son intensité a bougé, donc on reconstruit juste
+    // _selectedRunes à partir de l'état courant des nœuds plutôt que de re-router par
+    // ConnectRune/DisconnectNode.
+    private void OnRuneIntensityChanged()
+    {
+        RebuildSelectedRunes();
+        RefreshPreview();
     }
 
     // ========================================
@@ -245,19 +285,49 @@ public class CraftingPanel : MonoBehaviour
         return new Vector2(Mathf.Cos(rad) * RingRadius, Mathf.Sin(rad) * RingRadius);
     }
 
-    private void SetLine(int index, Vector2 targetPos)
+    private readonly Coroutine[] _lineRoutines = new Coroutine[MaxRunes + 2];
+
+    // Anime la ligne de connexion en croissance depuis le noyau (0,0) vers le nœud connecté,
+    // au lieu d'apparaître instantanément à sa taille finale (juice pass, voir conversation
+    // "the UI is boring"). Le pivot centré du rect (voir BuildLines) fait qu'ancrer le segment
+    // à `targetPos * (t * 0.5f)` avec `sizeDelta.x = distance * t` garde son extrémité proche du
+    // noyau fixée en (0,0) pendant que l'extrémité lointaine s'étend vers le nœud.
+    private void AnimateLineGrow(int index, Vector2 targetPos)
     {
+        if (_lineRoutines[index] != null) StopCoroutine(_lineRoutines[index]);
+        _lineRoutines[index] = StartCoroutine(LineGrowRoutine(index, targetPos));
+    }
+
+    private IEnumerator LineGrowRoutine(int index, Vector2 targetPos)
+    {
+        const float duration = 0.18f;
         Image line = _lines[index];
         line.gameObject.SetActive(true);
         RectTransform lr = line.rectTransform;
-        float distance = targetPos.magnitude;
-        lr.sizeDelta = new Vector2(distance, 4f);
-        lr.anchoredPosition = targetPos * 0.5f;
+        float fullDistance = targetPos.magnitude;
         float angle = Mathf.Atan2(targetPos.y, targetPos.x) * Mathf.Rad2Deg;
         lr.localRotation = Quaternion.Euler(0f, 0f, angle);
+
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = 1f - Mathf.Pow(1f - Mathf.Clamp01(elapsed / duration), 3f); // ease-out cubic
+            lr.sizeDelta = new Vector2(fullDistance * t, 4f);
+            lr.anchoredPosition = targetPos * (t * 0.5f);
+            yield return null;
+        }
+        lr.sizeDelta = new Vector2(fullDistance, 4f);
+        lr.anchoredPosition = targetPos * 0.5f;
+        _lineRoutines[index] = null;
     }
 
-    private void HideLine(int index) => _lines[index].gameObject.SetActive(false);
+    private void HideLine(int index)
+    {
+        if (_lineRoutines[index] != null) StopCoroutine(_lineRoutines[index]);
+        _lineRoutines[index] = null;
+        _lines[index].gameObject.SetActive(false);
+    }
 
     // ========================================
     // CONSTRUCTION UI
@@ -306,7 +376,8 @@ public class CraftingPanel : MonoBehaviour
         coreRect.pivot = new Vector2(0.5f, 0.5f);
         coreRect.sizeDelta = new Vector2(150f, 150f);
         coreRect.anchoredPosition = Vector2.zero;
-        core.GetComponent<Image>().color = new Color(0.3f, 0.3f, 0.35f, 1f);
+        _coreImage = core.GetComponent<Image>();
+        _coreImage.color = NeutralCoreColor;
 
         GameObject textObj = new GameObject("CoreText", typeof(RectTransform));
         textObj.transform.SetParent(coreRect, false);
@@ -382,7 +453,60 @@ public class CraftingPanel : MonoBehaviour
 
         CraftingNode node = nodeObj.AddComponent<CraftingNode>();
         node.Setup(this, kind, payload);
+
+        if (kind == CraftingNode.NodeKind.Rune)
+            AttachIntensitySlider(node, rt);
+
         return node;
+    }
+
+    // Slider d'intensité (voir RuneSlot.cs, "continuous tuning") — enfant du nœud lui-même
+    // plutôt que positionné indépendamment par CraftingPanel : il suit ainsi automatiquement
+    // le nœud pendant le drag et une fois connecté au slot, sans logique de repositionnement
+    // séparée. Construit à la main (Background + Handle + Slider) comme le reste de ce fichier
+    // (pas de prefab), minimal mais fonctionnel.
+    private void AttachIntensitySlider(CraftingNode node, RectTransform nodeRect)
+    {
+        GameObject sliderObj = new GameObject("IntensitySlider", typeof(RectTransform));
+        sliderObj.transform.SetParent(nodeRect, false);
+        RectTransform sliderRect = sliderObj.GetComponent<RectTransform>();
+        sliderRect.anchorMin = new Vector2(0.5f, 0f);
+        sliderRect.anchorMax = new Vector2(0.5f, 0f);
+        sliderRect.pivot = new Vector2(0.5f, 1f);
+        sliderRect.sizeDelta = new Vector2(90f, 12f);
+        sliderRect.anchoredPosition = new Vector2(0f, -2f);
+
+        GameObject bgObj = new GameObject("Background", typeof(RectTransform), typeof(Image));
+        bgObj.transform.SetParent(sliderRect, false);
+        RectTransform bgRect = bgObj.GetComponent<RectTransform>();
+        bgRect.anchorMin = Vector2.zero; bgRect.anchorMax = Vector2.one; bgRect.offsetMin = Vector2.zero; bgRect.offsetMax = Vector2.zero;
+        bgObj.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.55f);
+
+        GameObject handleAreaObj = new GameObject("HandleSlideArea", typeof(RectTransform));
+        handleAreaObj.transform.SetParent(sliderRect, false);
+        RectTransform handleAreaRect = handleAreaObj.GetComponent<RectTransform>();
+        handleAreaRect.anchorMin = Vector2.zero; handleAreaRect.anchorMax = Vector2.one;
+        handleAreaRect.offsetMin = new Vector2(4f, 0f); handleAreaRect.offsetMax = new Vector2(-4f, 0f);
+
+        GameObject handleObj = new GameObject("Handle", typeof(RectTransform), typeof(Image));
+        handleObj.transform.SetParent(handleAreaRect, false);
+        RectTransform handleRect = handleObj.GetComponent<RectTransform>();
+        handleRect.sizeDelta = new Vector2(8f, 12f);
+        handleObj.GetComponent<Image>().color = new Color(1f, 0.85f, 0.3f);
+
+        Slider slider = sliderObj.AddComponent<Slider>();
+        slider.targetGraphic = handleObj.GetComponent<Image>();
+        slider.handleRect = handleRect;
+        slider.direction = Slider.Direction.LeftToRight;
+        slider.minValue = RuneSlot.MinIntensity;
+        slider.maxValue = RuneSlot.MaxIntensity;
+        slider.wholeNumbers = false;
+        slider.value = node.Intensity;
+        slider.onValueChanged.AddListener(value =>
+        {
+            node.SetIntensity(value);
+            OnRuneIntensityChanged();
+        });
     }
 
     private void BuildSaveButtons()

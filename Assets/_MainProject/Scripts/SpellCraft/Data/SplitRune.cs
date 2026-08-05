@@ -11,8 +11,9 @@ public class SplitRune : RuneModifier
     [Tooltip("Nombre de projectiles supplémentaires (en plus de l'original).")]
     public int extraProjectiles = 2;
 
-    public override void OnSpawn(SpellContext context)
+    public override void OnSpawn(SpellContext context, float intensity)
     {
-        context.AddExtraProjectiles(extraProjectiles);
+        int effectiveExtra = Mathf.Max(0, Mathf.RoundToInt(extraProjectiles * intensity));
+        context.AddExtraProjectiles(effectiveExtra);
     }
 }

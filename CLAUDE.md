@@ -815,6 +815,148 @@ limitation of this tooling, not unfinished work.
       genuinely different per-hit hook (not expressible as a typed
       accumulator) may still require adding one then.
 
+**Post-Phase-6 correction (2026-08-05)** — user felt the crafting core was
+missing depth after comparing it against other games' spell-crafting systems
+(Magic and Mayhem, Noita, Elder Scrolls spell-making altar, Divinity: Original
+Sin 2, Fable's gesture magic — discussed but not built from, except the two
+picked below). Two additions, both scoped to the smaller of two options
+presented to the user (see conversation, "continuous tuning" / "terrain
+depth" choices):
+- **Continuous rune tuning** (Elder-Scrolls-slider inspired). New
+  `SpellCraft/Data/RuneSlot.cs`: `{ RuneModifier rune; float intensity
+  (0.25–2.0, default 1.0) }`, replacing the old bare `RuneModifier[]` on
+  `SpellRecipe.modifierRunes` — intensity lives on the slot, not the shared
+  rune asset, since the same rune can be equipped at different intensities in
+  different recipes. `RuneModifier.OnSpawn` gained an `intensity` parameter
+  (`ISpellModifier` interface updated to match); `RuneModifier` itself gained
+  `EffectiveManaCostMultiplier`/`EffectiveCooldownMultiplier` (`authored ×
+  intensity`), read by `SpellRecipe.ManaCost`/`CooldownTime`. Each of the 4
+  existing runes scales its own parameter: `BounceRune`/`SplitRune` scale
+  their flat counts (`count × intensity`, rounded — so a Bounce rune dialed to
+  minimum intensity can round down to 0 bounces, a real and intended
+  consequence of the "weak/cheap" end of the dial, not a bug);
+  `PersistRune`/`ExpandRune` interpolate around their multiplier's neutral
+  point of 1 (`1 + (authoredMultiplier - 1) × intensity`) so intensity 0
+  doesn't zero out the duration/radius bonus, just shrinks it. **Intensity
+  1.0 reproduces the old fixed-rune behavior exactly** — this is a pure
+  extension, not a retune of existing content; the one existing recipe asset
+  referencing a rune directly (`Aqua_Zone_Frost.asset`, Persist) was migrated
+  to the new serialized shape (`rune: {...}, intensity: 1`) by hand-editing
+  its YAML, since Unity can't auto-migrate a field type change from object
+  array to struct array. Grimoire: `CraftingNode` gained an `Intensity`
+  property (the node itself IS the equipped slot — one node per rune, moved
+  between palette and ring rather than recreated — so intensity lives there
+  rather than in separate `CraftingPanel` state); `CraftingPanel` builds a
+  small hand-rolled slider (Background + Handle + `UnityEngine.UI.Slider`, no
+  prefab, same convention as the rest of the file) as a **child of each rune
+  node**, so it automatically follows the node during drag/connect instead of
+  needing separate repositioning logic. `_selectedRunes` is now
+  `List<RuneSlot>`; the live Mana/Cooldown preview in the core already
+  reflected `SpellRecipe.ManaCost`/`CooldownTime`, so slider drags get visible
+  feedback for free, no extra preview UI needed.
+- **Terrain patch stacking** (DOS2-surfaces inspired, deliberately small —
+  full cross-school reactions like Steam/Magma stay Phase 8's "Environmental
+  synergies," not built here). `EnvironmentState.RegisterPatch` now checks for
+  an existing overlapping patch of the same `TerrainType` before creating a
+  new one (`FindOverlapping`, refactored out of the old inline `HasPatchAt`
+  loop and reused by both); if found, it increments that patch's new
+  `Intensity` field (capped at `MaxIntensity = 3`), extends its radius/expiry
+  to the max of old/new, and returns the resulting intensity instead of
+  silently registering a second independent patch at the same spot. New
+  `GetIntensityAt` query added alongside the existing `HasPatchAt`. Single
+  concrete payoff wired so the mechanic isn't just invisible bookkeeping:
+  `ZoneSpell.Init` reads `RegisterPatch`'s return value and applies +50%
+  damage per stack beyond the first (`1 + (intensity - 1) × 0.5`) — recasting
+  an Ignis Zone onto ground it (or an earlier cast) already marked as Fire now
+  hits harder, captured once at spawn like `RadiusMultiplier`/
+  `DurationMultiplier` rather than re-queried per tick.
+
+Verified via Unity MCP Play Mode (`execute_code`): Bounce rune cost matched
+the linear formula exactly at intensity 0.25/1.0/2.0 (7.875/10.5/14 Mana off a
+7-Mana base, intensity 1.0 exactly reproducing the pre-change fixed value);
+`OnSpawn(intensity: 0.25)` on a bounceCount-2 rune correctly produced 0
+bounces (rounds down, matches the "can go to zero" design note above); four
+same-spot `RegisterPatch(Fire, ...)` calls produced intensity 1→2→3→3
+(correctly capped), a same-spot `Water` registration correctly stayed a
+separate patch at intensity 1; two same-spot Ignis Zone casts via the real
+`SpellFactory.CreateSpell` path dealt 30 then 45 damage (exactly the designed
+×1.5). Zero console errors/warnings before or after the Play Mode session.
+
+**Game feel / juice pass (2026-08-05, same session, follow-up)** — user felt
+spells and the Grimoire UI lacked juice. Two scoped additions (see
+conversation, "spell juice"/"UI juice" choices):
+- **Spell juice — hit-stop + particle burst + trail.** New `Core/HitStop.cs`:
+  static `HitStop.Trigger(duration, scale)` gels `Time.timeScale` briefly then
+  restores it — this closes an actual gap in CLAUDE.md's own v3.1→v4.0
+  migration table ("Hit stop on impactful spells only"), which was never
+  implemented for the SpellCraft forms (the v3.1 precedent,
+  `PostureSystem.StaggerCoroutine`, is archived and wasn't reachable). Static
+  class + a hidden `HitStopRunner` MonoBehaviour created on first use (same
+  "static registry, no Inspector-wired singleton" reasoning as
+  `EnvironmentState`) since a coroutine needs a live GameObject to run on.
+  New `SpellCraft/Runtime/SpellImpactVFX.cs`: procedural one-shot particle
+  burst (`ParticleSystemStopAction.Destroy`, self-cleans), colored by
+  `SchoolData.primaryColor`, generic across all 7 schools rather than reusing
+  the Ignis-only VFX prefabs — shader resolved with a fallback chain (URP
+  Particles/Unlit → URP Unlit → Sprites/Default) to never render pink like
+  the Wizard's Standard-shader materials did before their replacement.
+  **Hit-stop applies only to genuinely discrete impacts** — `ProjectileSpell`
+  (one trigger per hit, before bounce/destroy) and `ImpactSpell` (one trigger
+  for the whole AoE burst, not per target hit, so hitting 3 enemies doesn't
+  freeze time 3 times) — deliberately **not** `ZoneSpell`, whose ticks repeat
+  every `tickInterval` for the whole duration; freezing time on every tick
+  would read as a near-permanent freeze rather than a punchy impact. Zone
+  ticks get the particle burst (visual "this tick landed" feedback) without
+  the hit-stop. `ProjectileSpell` also gained a `TrailRenderer` (the only
+  form that travels) with a color-to-transparent gradient. Verified via
+  Unity MCP Play Mode: `HitStop.Trigger` measurably dropped `Time.timeScale`
+  to the requested value and a manually-driven `Freeze` coroutine restored it
+  to 1; a real Projectile-vs-Enemy hit (through `SpellFactory.CreateSpell`,
+  reflection-stepped `Update()`) dealt damage, spawned a `TrailRenderer`, and
+  left `Time.timeScale` at 0.05 immediately after; an Impact hit did the
+  same; a manually-invoked Zone `ApplyTick` dealt damage but left
+  `Time.timeScale` at 1 (confirms the exclusion is real, not accidental).
+  **Bug caught and fixed during this verification**: `SpellImpactVFX.Spawn`
+  originally configured `ParticleSystem.main` (duration, emission, shape)
+  *after* `AddComponent<ParticleSystem>()` on an already-active GameObject —
+  `playOnAwake` defaults to true, so the system started playing via
+  `OnEnable` before configuration finished, logging a real Unity warning
+  ("Setting the duration while system is still playing is not supported") on
+  every single burst. Fixed by creating the GameObject inactive, configuring
+  the fully-idle `ParticleSystem`, then activating and calling `Play()` —
+  confirmed zero console output after the fix, across both a standalone burst
+  test and the full Projectile-hit pipeline.
+- **Grimoire UI juice — motion + color.** `CraftingNode` gained
+  `AnimateTo`/`AnimateToOrigin` (ease-out cubic tween + a brief scale-punch on
+  arrival when connecting, no punch when just returning to the palette),
+  replacing every instant `anchoredPosition` snap in `CraftingPanel`'s
+  Connect/Disconnect paths. Connector lines (`AnimateLineGrow`, replacing the
+  old instant `SetLine`) now grow from the core outward instead of appearing
+  at full length — the centered-pivot rect math already in place made this a
+  matter of scaling `sizeDelta`/`anchoredPosition` by the same eased `t` used
+  for the node tween, not a rewrite. The core panel's background now
+  animates toward the selected school's color (`Color.Lerp` at 50% so white
+  text stays legible), read back to neutral gray on school disconnect —
+  matches the GDD's "Toon Fantasy, colorful, warm" pillar instead of staying
+  permanently flat gray. `GrimoireUI` gained a `CanvasGroup` + a fade/scale
+  open-close animation (`AnimateOpenClose`, ease-out opening / ease-in
+  closing, driven by `Time.unscaledDeltaTime` so it isn't affected by an
+  in-progress `HitStop` freeze) replacing the instant `SetActive` toggle —
+  the canvas now stays active through the closing animation and only
+  deactivates once faded out. Verified via Unity MCP Play Mode (reflection-
+  invoked private `Toggle`/`AnimateOpenClose`/node-drop paths, plus a
+  screenshot): opening reached the correct final alpha/scale with no
+  exceptions; connecting a Form + School node produced no exceptions and the
+  screenshot confirmed the core panel visibly tinted to Ignis's orange, the
+  connector lines mid-grow at a partial (not full, not zero) length —
+  confirming the tween is genuinely progressive across frames, not an
+  instant jump dressed up as one — and the rune palette's new intensity
+  sliders rendering under each rune node. **Not a real-time playtest** — same
+  standing MCP-environment limitation noted throughout this project (frames
+  don't tick normally between tool calls, so exact animation *feel*/timing
+  is unverified); the user can now judge the actual motion live in-editor.
+  Zero console errors/warnings throughout.
+
 ### Phase 7 — Village Hub + First Library
 - [ ] Havrevent village layout, 4-5 NPCs with dialogue
 - [ ] NPCDialogue system

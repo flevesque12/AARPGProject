@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -22,7 +23,10 @@ public class GrimoireUI : MonoBehaviour
     [SerializeField] private RuneModifier[] _availableRunes;
 
     private GameObject _canvasObj;
+    private CanvasGroup _canvasGroup;
+    private RectTransform _panelRect;
     private bool _isOpen;
+    private Coroutine _openCloseRoutine;
 
     private void Awake()
     {
@@ -31,6 +35,8 @@ public class GrimoireUI : MonoBehaviour
         if (_spellCaster == null) _spellCaster = GetComponent<SpellCaster>();
 
         BuildUI();
+        _canvasGroup.alpha = 0f; // état "fermé" initial, pour que la toute première ouverture s'anime aussi (voir AnimateOpenClose)
+        _panelRect.localScale = Vector3.one * 0.85f;
         _canvasObj.SetActive(false);
     }
 
@@ -47,8 +53,44 @@ public class GrimoireUI : MonoBehaviour
     private void Toggle()
     {
         _isOpen = !_isOpen;
-        _canvasObj.SetActive(_isOpen);
         _player?.LockMovement(_isOpen);
+
+        if (_isOpen) _canvasObj.SetActive(true); // activé avant l'anim d'ouverture, désactivé après celle de fermeture
+
+        if (_openCloseRoutine != null) StopCoroutine(_openCloseRoutine);
+        _openCloseRoutine = StartCoroutine(AnimateOpenClose(_isOpen));
+    }
+
+    // Fondu + léger scale-in/out au lieu d'un SetActive instantané (juice pass, voir
+    // conversation "the UI is boring"). Time.unscaledDeltaTime plutôt que Time.deltaTime : le
+    // Grimoire doit s'animer normalement même si un hit-stop (voir Core/HitStop.cs) a le temps
+    // gelé au moment où le joueur ouvre/ferme.
+    private IEnumerator AnimateOpenClose(bool opening)
+    {
+        const float duration = 0.18f;
+        const float scaleFrom = 0.85f;
+
+        float startAlpha = _canvasGroup.alpha;
+        float startScale = _panelRect.localScale.x;
+        float targetAlpha = opening ? 1f : 0f;
+        float targetScale = opening ? 1f : scaleFrom;
+
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float eased = opening ? 1f - Mathf.Pow(1f - t, 3f) : t * t; // ease-out en ouverture, ease-in en fermeture
+            _canvasGroup.alpha = Mathf.Lerp(startAlpha, targetAlpha, eased);
+            _panelRect.localScale = Vector3.one * Mathf.Lerp(startScale, targetScale, eased);
+            yield return null;
+        }
+
+        _canvasGroup.alpha = targetAlpha;
+        _panelRect.localScale = Vector3.one * targetScale;
+
+        if (!opening) _canvasObj.SetActive(false);
+        _openCloseRoutine = null;
     }
 
     private void BuildUI()
@@ -61,6 +103,7 @@ public class GrimoireUI : MonoBehaviour
         canvas.sortingOrder = 200; // au-dessus du PlayerHUD (100)
         _canvasObj.AddComponent<CanvasScaler>();
         _canvasObj.AddComponent<GraphicRaycaster>();
+        _canvasGroup = _canvasObj.AddComponent<CanvasGroup>();
 
         GameObject backdrop = new GameObject("Backdrop", typeof(RectTransform), typeof(Image));
         backdrop.transform.SetParent(_canvasObj.transform, false);
@@ -78,6 +121,7 @@ public class GrimoireUI : MonoBehaviour
         panelRect.pivot = new Vector2(0.5f, 0.5f);
         panelRect.sizeDelta = new Vector2(1000f, 700f);
         panelRect.anchoredPosition = Vector2.zero;
+        _panelRect = panelRect;
 
         CraftingPanel craftingPanel = panelObj.AddComponent<CraftingPanel>();
         craftingPanel.Configure(_availableForms, _availableSchools, _availableRunes, _spellCaster);

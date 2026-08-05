@@ -12,8 +12,9 @@ public class BounceRune : RuneModifier
     [Tooltip("Nombre de rebonds avant destruction du projectile.")]
     public int bounceCount = 2;
 
-    public override void OnSpawn(SpellContext context)
+    public override void OnSpawn(SpellContext context, float intensity)
     {
-        context.AddBounces(bounceCount);
+        int effectiveBounces = Mathf.Max(0, Mathf.RoundToInt(bounceCount * intensity));
+        context.AddBounces(effectiveBounces);
     }
 }

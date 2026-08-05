@@ -11,8 +11,13 @@ public class PersistRune : RuneModifier
     [Tooltip("Multiplicateur appliqué à la durée de l'effet. Ex: 2 = durée doublée.")]
     public float durationMultiplier = 2f;
 
-    public override void OnSpawn(SpellContext context)
+    public override void OnSpawn(SpellContext context, float intensity)
     {
-        context.MultiplyDuration(durationMultiplier);
+        // Interpolation autour du point neutre 1 (durée inchangée) plutôt qu'un simple
+        // durationMultiplier * intensity : sinon intensité 0 annulerait complètement la durée
+        // au lieu de simplement "moins de bonus". Ex: durationMultiplier=2, intensity=1 -> 2
+        // (valeur d'auteur inchangée), intensity=0.25 -> 1.25, intensity=2 -> 3.
+        float effectiveMultiplier = 1f + (durationMultiplier - 1f) * intensity;
+        context.MultiplyDuration(effectiveMultiplier);
     }
 }
