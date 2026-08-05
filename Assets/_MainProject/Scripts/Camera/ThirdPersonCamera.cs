@@ -11,22 +11,38 @@ using UnityEngine;
 /// as opposed to an over-the-shoulder camera that stays glued behind the character).
 /// Replaces CameraController (PoE2-style isometric).
 ///
+/// BUG FIX (2026-08-05): this used to also have a CinemachineRotationComposer (Aim stage)
+/// driving rotation. That is a dynamic "keep the target centered in frame" behavior — it
+/// continuously recomputes rotation from the camera's CURRENT (damped, laggy) position toward
+/// LookAt, not a fixed angle. Since CinemachineFollow's Body stage only ever writes camera
+/// POSITION (confirmed via Unity MCP: disabling Aim and moving the target produced zero
+/// rotation change — Body never touches rotation at all), the Aim stage was the sole source of
+/// a real, measurable rotation drift (~10° yaw + ~3° pitch just from a moderate player
+/// displacement) as the player moved around, proportional to how far the damped camera
+/// position lagged the ideal follow offset. That drift is what caused two symptoms: the
+/// camera visibly not staying "fixed in place" as advertised, AND spells firing in the wrong
+/// direction relative to the mouse — PlayerController's mouse-to-ground raycast
+/// (mainCamera.ScreenPointToRay) uses whatever the camera's actual current rotation is, so a
+/// silently rotating camera desyncs "where the cursor looks on screen" from "what direction
+/// that raycast resolves to in world space". Fix: removed the RotationComposer entirely and
+/// instead set this GameObject's own transform.rotation directly to the constant
+/// pitch/yaw every frame (see LateUpdate) — confirmed via the same Unity MCP test that this
+/// produces zero drift regardless of player displacement, since nothing else in the pipeline
+/// (Body, Deoccluder) ever writes to rotation.
+///
 /// SETUP:
 ///   1. Add a CinemachineBrain component on the Main Camera.
 ///   2. Create a GameObject with CinemachineCamera + CinemachineFollow +
-///      CinemachineRotationComposer + CinemachineDeoccluder + this script.
+///      CinemachineDeoccluder + this script (no Aim component needed or wanted).
 ///   3. Leave Target empty to auto-find the GameObject tagged "Player".
 /// </summary>
 [RequireComponent(typeof(CinemachineCamera))]
 [RequireComponent(typeof(CinemachineFollow))]
-[RequireComponent(typeof(CinemachineRotationComposer))]
 [RequireComponent(typeof(CinemachineDeoccluder))]
 public class ThirdPersonCamera : MonoBehaviour
 {
     [Header("Target")]
     [SerializeField] private Transform target;
-    [Tooltip("Vertical offset for the look-at point (e.g. chest height instead of feet).")]
-    [SerializeField] private float lookAtHeightOffset = 1f;
 
     [Header("Framing angle (fixed in world space)")]
     [Tooltip("Downward pitch angle, in degrees.")]
@@ -41,7 +57,6 @@ public class ThirdPersonCamera : MonoBehaviour
 
     [Header("Damping (smooth follow, no hard snap)")]
     [SerializeField] private float positionDamping = 0.8f;
-    [SerializeField] private float rotationDamping = 0.8f;
 
     [Header("Collision")]
     [SerializeField] private LayerMask obstacleLayers;
@@ -49,14 +64,12 @@ public class ThirdPersonCamera : MonoBehaviour
 
     private CinemachineCamera vcam;
     private CinemachineFollow follow;
-    private CinemachineRotationComposer rotationComposer;
     private CinemachineDeoccluder deoccluder;
 
     private void Awake()
     {
         vcam = GetComponent<CinemachineCamera>();
         follow = GetComponent<CinemachineFollow>();
-        rotationComposer = GetComponent<CinemachineRotationComposer>();
         deoccluder = GetComponent<CinemachineDeoccluder>();
     }
 
@@ -72,26 +85,36 @@ public class ThirdPersonCamera : MonoBehaviour
         if (target != null)
         {
             vcam.Follow = target;
-            vcam.LookAt = target;
+            vcam.LookAt = target; // no longer used for framing (no Aim component), kept so CinemachineDeoccluder has an occlusion target
         }
 
         vcam.Lens.FieldOfView = fieldOfView;
 
-        rotationComposer.TargetOffset = Vector3.up * lookAtHeightOffset;
-        rotationComposer.Damping = new Vector2(rotationDamping, rotationDamping);
-
-        // WorldSpace: the offset does NOT rotate with the player's own yaw, so the
-        // camera keeps a constant angle and only translates to follow position —
-        // it never swings around when the player turns.
+        // WorldSpace: the offset does NOT rotate with the player's own yaw, and (per the bug
+        // fix note above) Body never writes rotation at all — position-only tracking.
         TrackerSettings tracker = follow.TrackerSettings;
         tracker.BindingMode = BindingMode.WorldSpace;
         tracker.PositionDamping = new Vector3(positionDamping, positionDamping, positionDamping);
         follow.TrackerSettings = tracker;
 
         ApplyFraming();
+        ApplyFixedRotation();
 
         deoccluder.CollideAgainst = obstacleLayers;
         deoccluder.MinimumDistanceFromTarget = minimumDistanceFromTarget;
+    }
+
+    // Reasserted every frame rather than only once in Start(): guarantees the angle can never
+    // drift (see class doc), and automatically follows SetYawAngle()/SetDistance() changes
+    // without extra plumbing.
+    private void LateUpdate()
+    {
+        ApplyFixedRotation();
+    }
+
+    private void ApplyFixedRotation()
+    {
+        transform.rotation = Quaternion.Euler(pitchAngle, yawAngle, 0f);
     }
 
     private void ApplyFraming()

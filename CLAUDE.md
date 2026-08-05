@@ -957,6 +957,123 @@ conversation, "spell juice"/"UI juice" choices):
   is unverified); the user can now judge the actual motion live in-editor.
   Zero console errors/warnings throughout.
 
+**Test props (2026-08-05, same session, follow-up)** — user asked for gym props to test
+spells crafted in the Grimoire. Added 6 target dummies to `MovementGym.unity` (duplicates of
+the existing `Enemy`, so they carry the correct mesh/material/collider/layer setup): 3 in a
+line in front of the player spawn (`TestDummy_Near`/`Mid`/`Far` at 4/10/18m, for
+Projectile-range and Impact/Aura-range testing) and a 3-dummy triangular cluster
+(`TestDummy_Cluster_A/B/C`, ~3m spacing, off to the side) for AoE/Split/Bounce/terrain-stacking
+testing. Each had `EnemyAI`/`EnemyTelegraph` removed (passive — won't chase or attack,
+shouldn't interrupt controlled testing) but **kept `NavMeshAgent`** so Aqua's slow and Terra's
+knockback effects stay visibly testable; `HealthSystem` retuned to 500 HP / 15 regen-per-sec /
+`destroyOnDeath = false` so they're a reusable punching bag rather than something that dies and
+despawns mid-test-session. Verified via Unity MCP Play Mode: all 6 report `onNavMesh=True`,
+spawn at full HP, and a real cast through `SpellFactory` dealt damage correctly. Scene saved.
+
+**Bug fix — camera rotation drift breaking spell aim direction (2026-08-05, same session,
+follow-up)** — user reported that cast spells didn't travel toward the mouse cursor, and
+asked to "fix the camera in place". Root cause, confirmed by directly inspecting Cinemachine's
+internal camera state via Unity MCP (`CinemachineCamera.InternalUpdateCameraState`, bypassing
+the Brain to isolate Body vs Aim behavior): `ThirdPersonCamera` had both `CinemachineFollow`
+(Body stage, position-only, `WorldSpace` binding — confirmed via this same test that Body
+*never* writes rotation, at all, under any condition) **and** `CinemachineRotationComposer`
+(Aim stage). Aim always overrides Body's rotation output, and a Rotation Composer's entire job
+is to continuously re-aim the camera to keep its LookAt target centered in frame — the exact
+opposite of "fixed angle, translate only" (the design intent documented in this file's own
+Player Movement section). Since the camera's position lags the player via damping
+(`positionDamping = 0.8`), the target is never exactly where the Composer expects it, so it
+kept nudging rotation frame to frame: measured **~10° yaw drift + ~3° pitch drift from a
+single moderate player displacement** in testing (player moved to (20, 5), camera rotation
+went from (47.22, 0, 0) to (44.73, 10.78, 0) with the Composer active). That drift is exactly
+what broke spell aim: `PlayerController.UpdateAimWorldPosition`'s mouse raycast
+(`Camera.main.ScreenPointToRay`) resolves a world direction from the camera's **current**
+rotation — a camera that's silently rotated away from its intended fixed angle desyncs "where
+the cursor looks on screen" from "what direction that raycast actually produces". Fix: removed
+`CinemachineRotationComposer` (component deleted from the `ThirdPersonCamera` GameObject in
+`MovementGym.unity`, `[RequireComponent]` attribute removed from the script) and replaced its
+job with `ThirdPersonCamera` writing its own `transform.rotation` directly to the constant
+`Quaternion.Euler(pitchAngle, yawAngle, 0)` in `LateUpdate` every frame — confirmed via the
+same `InternalUpdateCameraState`-driven test that this produces **zero rotation drift** across
+large simulated player displacements (including a (-18, 22) teleport). Also removed the now-
+dead `lookAtHeightOffset`/`rotationDamping` fields (only ever consumed by the removed
+Composer). End-to-end verification through the real gameplay path (not just the isolated
+camera test): `PlayerCombat.TryCastSlot` → `SpellCaster.TryCastSpell` →
+`SpellFactory.CreateSpell` produced a `ProjectileSpell` whose actual travel direction matched
+`PlayerController.AimWorldPosition` exactly (`Vector3.Dot` = 1, and `AimWorldPosition` itself
+was now bit-identical across repeated frames at a fixed mouse/camera state — previously it
+could jitter as the camera rotation drifted even with a static cursor). Zero console
+errors/warnings. Scene saved.
+
+**Bug fix — Projectile spells fly over the target's head (2026-08-06)** — user reported
+projectiles visibly passing through/over targets without dealing damage. Root cause: both
+`SpellCaster.ComputeCastGeometry` (v4.0) and the legacy `Skills/SkillCaster.CastProjectile`
+(v3.1) spawn the projectile at `transform.position + Vector3.up` — a **full extra unit**
+above the caster's own pivot. But `Player`'s `CharacterController.center = (0,0,0)`, meaning
+`transform.position.y` (1.062) is already the *vertical center* of the player's own 2-unit
+capsule (confirmed via the CharacterController component: `bounds.center.y = 1.062` exactly
+matches `transform.position.y`) — i.e. already roughly chest height, not feet-level like a
+more typical CharacterController setup. Adding another full unit on top put every Projectile's
+spawn (and therefore its entire flat, non-arcing flight path — direction.y is always forced to
+0) at y≈2.06, at or above head height. Target dummies (Enemy duplicates, scale 0.8) have a
+CapsuleCollider top at y≈1.84 — so every Projectile flew in a dead-straight line comfortably
+above every target's collider, 100% of the time, regardless of range or framerate (not an
+intermittent tunneling issue — this was `OverlapSphere` correctly finding nothing, because
+there was genuinely nothing there to find at that height). This is also why none of the
+Phase 6 verification passes ever caught it: every one of those tests hand-constructed a
+`SpellFactory.CreateSpell` origin already at the target's height, bypassing
+`ComputeCastGeometry`/`CastProjectile` entirely — the real player-facing cast path was never
+actually exercised end-to-end with the *default* origin logic until now.
+Fix: added a tunable `[SerializeField] private float _castHeightOffset = 0.3f` to both
+`SpellCaster` and `SkillCaster` (no magic numbers, per convention), replacing the hardcoded
+`Vector3.up` with `Vector3.up * _castHeightOffset` — puts the spawn at y≈1.36, comfortably
+inside every current target's collider range (0.03–1.84) with margin on both sides. Verified
+via Unity MCP Play Mode with a direct before/after comparison at the exact same target
+(`TestDummy_Near`, 4m away, well within the recipe's 8-unit range): the old `Vector3.up * 1.0`
+offset produced a spawn at y=2.06 and a confirmed miss (target HP unchanged, 500→500); the new
+`× 0.3` offset produced a spawn at y=1.36 and a confirmed hit (500→470, the expected 30
+Ignis-Projectile damage) — same recipe, same target, same distance, only the height changed.
+Zero console errors/warnings.
+
+**Bug fix — Aura shield visual never disappears (2026-08-06, same session, follow-up)** —
+user reported the Aura's shield bubble looks always-active with no timer. Root cause:
+`AuraSpell.BuildVisual()` deliberately parents its shield-bubble sphere to `context.Caster`
+(the player), not to the `AuraSpell`'s own tracking GameObject, specifically so the bubble
+visually follows the player around while active. But `ExpireAfter`'s cleanup only ever called
+`Destroy(gameObject)` — destroying the (invisible) tracking object, never the visual that
+actually lives under the player. The shield *mechanic* was never broken: `HealthSystem.
+ShieldAmount` correctly hit 0 via `ClearShield()` on schedule (confirmed directly:
+`shield after cast=30` → `shield=0` after driving `ExpireAfter` to completion) — only the
+leftover sphere was never cleaned up, so every cast left the player with one more permanent
+orphaned bubble as a child object (confirmed: player `childCount` went 4→5 on cast and *stayed
+at 5* after the shield itself had already expired). Fix: `AuraSpell` now stores the visual in
+a `_visual` field and calls `Destroy(_visual)` alongside `Destroy(gameObject)` in
+`ExpireAfter`. Verified via Unity MCP: after the fix, `Destroy(_visual)` targets the same
+`Sphere` object confirmed correctly parented and referenced — manually forcing an immediate
+destroy on that exact reference (working around this environment's inability to let a real
+frame pass for Unity's normal deferred `Destroy()` to take effect) brought `childCount` back
+down from 5 to 4, proving the reference and cleanup logic are correct; the live game will see
+this happen automatically at the next real frame. Zero console errors/warnings.
+
+**Bug fix — purple rune nodes hard to click/drag in the Grimoire (2026-08-06, same session,
+follow-up)** — user reported the rune modifier nodes specifically (not Form/School) were hard
+to click and drag. Root cause, found by comparing exact world-space rects of every relevant UI
+element via Unity MCP (`RectTransform.GetWorldCorners`): `CraftingPanel.BuildFeedbackText()`
+runs *last* in `BuildUI()`, so its 600px-wide, horizontally-centered "Feedback" label renders
+(and raycasts) on top of every earlier sibling it overlaps. Measured rects showed the
+Feedback label spanning world X=[293.5, 893.5] — which fully contains all 4 rune sliders'
+X-range (378.5–808.5) and overlaps the bottom half of every rune node's own Y-range (label
+Y=[11,41] vs. node Y=[21,61]). Since `UnityEngine.UI.Text` defaults to `raycastTarget = true`,
+this invisible-background label was silently swallowing clicks meant for the bottom half of
+every rune node and 100% of every intensity slider underneath it. Form nodes (world X≈173.5)
+and School nodes (world X≈1013.5) sit safely outside the label's span, which is exactly why
+only the purple runes were affected — first hard evidence ruling out the newly-added intensity
+slider itself as the cause (its own geometry was independently confirmed non-overlapping with
+its parent node, node Y=[21,61] vs. slider Y=[7,19], a clean 2-unit gap — the slider addition
+was not the bug, this pre-existing label was). Fix: `_feedbackText.raycastTarget = false` — it
+only ever displays status text, never needed to receive clicks. Verified via Unity MCP:
+confirmed `false` post-rebuild; no further geometry changes were needed since the root cause
+was fully explained by this one property. Zero console errors/warnings.
+
 ### Phase 7 — Village Hub + First Library
 - [ ] Havrevent village layout, 4-5 NPCs with dialogue
 - [ ] NPCDialogue system

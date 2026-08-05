@@ -92,11 +92,12 @@ numbers, no singletons (Inspector-driven dependency injection).
 ### Camera (ThirdPersonCamera)
 - Cinemachine, top-down elevated angle, **fully game-controlled** — no mouse/stick input
   drives it at all (mouse is reserved for spell aiming instead)
-- Fixed pitch (50°) in **world space** (`CinemachineFollow.TrackerSettings.BindingMode =
-  WorldSpace`) — position tracks the player with damping, angle never swings around when
-  the player turns
-- `CinemachineRotationComposer` + `CinemachineDeoccluder` for smooth framing and obstacle
-  avoidance
+- Fixed pitch (50°) in **world space** — position tracks the player with damping (Body only,
+  via `CinemachineFollow.TrackerSettings.BindingMode = WorldSpace`); rotation is set directly
+  to a constant `Quaternion.Euler(pitch, yaw, 0)` every frame and never recomputed, so it
+  genuinely cannot drift regardless of how the player moves
+- **No Aim component** (`CinemachineRotationComposer` was removed — see *Bug Fixes* below);
+  `CinemachineDeoccluder` still handles obstacle avoidance
 
 ### Player Movement (PlayerController)
 - `CharacterController`-driven, camera-relative WASD movement (`moveSpeed = 8`,
@@ -240,6 +241,82 @@ Hand-written URP HLSL (not Shader Graph — see Progress notes) implementing the
 - 4 spell slot icons with cooldown overlay + school color tint
 - No more stamina bar, riposte indicator, or keybinding action bar (retired with those
   systems)
+
+---
+
+## Bug Fixes
+
+### Camera rotation drift → wrong spell aim direction (2026-08-05)
+Symptom: spells fired toward the mouse cursor didn't actually travel toward it, and the
+"fixed angle" top-down camera visibly rotated slightly as the player moved instead of staying
+locked.
+
+Root cause, confirmed via direct inspection of Cinemachine's internal camera state (Unity
+MCP): the camera had both a `CinemachineFollow` (Body stage — position only, `WorldSpace`
+binding) **and** a `CinemachineRotationComposer` (Aim stage). Aim always overrides Body's
+rotation, and a Rotation Composer's entire purpose is to *continuously re-aim* the camera to
+keep its target centered in frame — directly contradicting the "fixed angle, translate only"
+design goal. Because the camera's position lags the player with damping, the target is never
+exactly where the Composer expects, so it kept nudging the rotation frame to frame — measured
+as ~10° of yaw drift and ~3° of pitch drift from a single moderate player displacement in
+testing.
+
+That drifting rotation is also what broke spell aiming: `PlayerController`'s mouse-to-ground
+raycast (`Camera.main.ScreenPointToRay`) resolves a world direction from whatever the camera's
+*current* rotation happens to be — a camera that's silently rotated away from its intended
+angle desyncs "where the cursor looks on screen" from "what direction that raycast actually
+produces".
+
+Fix: removed `CinemachineRotationComposer` entirely. `ThirdPersonCamera` now sets its own
+`transform.rotation` directly to the constant `pitch`/`yaw` every `LateUpdate`, rather than
+delegating rotation to any Cinemachine Aim behavior. Verified via Unity MCP
+(`CinemachineCamera.InternalUpdateCameraState` driven directly, bypassing the Brain): camera
+rotation stayed exactly fixed across large simulated player displacements, and a live cast
+through the real `PlayerCombat → SpellCaster → SpellFactory` pipeline produced a projectile
+whose travel direction matched `PlayerController.AimWorldPosition` exactly (dot product = 1).
+
+### Projectile spells flying over the target's head (2026-08-06)
+Symptom: Projectile spells visibly passed through/over enemies without ever dealing damage.
+
+Root cause: the spawn origin (`transform.position + Vector3.up`, used by both the v4.0
+`SpellCaster` and the legacy `SkillCaster`) added a full extra unit above the caster's own
+pivot — but the Player's `CharacterController` is centered (`center = (0,0,0)`), so
+`transform.position.y` is already roughly chest height, not feet-level. The extra unit pushed
+every Projectile's flat, non-arcing flight path to head height and above — consistently
+clearing every target's collider, on every cast, regardless of range or framerate.
+
+Fix: replaced the hardcoded offset with a tunable `_castHeightOffset` field (default `0.3`) on
+both casters. Verified with a direct before/after comparison at the same target/range: the old
+offset produced a confirmed miss, the new one a confirmed hit (same recipe, same distance,
+height was the only variable).
+
+### Aura shield visual never disappears (2026-08-06)
+Symptom: the Aura spell's shield bubble looked permanently active — it never faded away, and
+recasting it left additional bubbles behind.
+
+Root cause: `AuraSpell.BuildVisual()` intentionally parents the shield-bubble sphere to the
+**caster** (so it visually follows the player around) rather than to the spell's own tracking
+GameObject. But the expiry coroutine only ever called `Destroy(gameObject)` — destroying the
+spell's tracking object, never the visual living separately under the player. The shield
+*mechanic* (`HealthSystem.ShieldAmount`) always expired correctly on schedule; only the leftover
+sphere never got cleaned up, and a new one piled up on every recast.
+
+Fix: `AuraSpell` now keeps a reference to the visual it creates and explicitly destroys it
+alongside the tracking object when the aura expires.
+
+### Rune modifier nodes hard to click/drag in the Grimoire (2026-08-06)
+Symptom: the purple rune nodes (Bounce/Split/Persist/Expand) were noticeably harder to click
+and drag than the Form/School nodes.
+
+Root cause: the Grimoire's "Feedback" text label (built last, so it renders — and raycasts —
+on top of everything else) is 600px wide and horizontally centered, which happens to span
+exactly the width the 4 rune nodes sit under. Since `Text` defaults to `raycastTarget = true`,
+that invisible-background label was silently intercepting clicks aimed at the bottom half of
+every rune node and its entire intensity slider. Form/School nodes sit far enough to the
+left/right to clear the label's width, which is why only the runes were affected.
+
+Fix: set the feedback label's `raycastTarget = false` — it only ever displays text and never
+needed to receive clicks itself.
 
 ---
 

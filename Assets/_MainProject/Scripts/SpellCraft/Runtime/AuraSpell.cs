@@ -15,6 +15,15 @@ public class AuraSpell : MonoBehaviour
     private SpellContext _context;
     private HealthSystem _casterHealth;
 
+    // BuildVisual() parents the shield bubble to the CASTER (not to this AuraSpell's own
+    // GameObject) so it follows the player around while the aura is active — but that means
+    // Destroy(gameObject) in ExpireAfter only destroys this tracking object, never the visual
+    // living under the player. Bug fix (2026-08-06): without this reference, the bubble was
+    // orphaned permanently on every cast (shield mechanic correctly expired via ClearShield,
+    // but the visual never did — looked like "the aura never turns off", and stacked a new
+    // leftover sphere on the player each time Aura was recast).
+    private GameObject _visual;
+
     public void Init(SpellContext context)
     {
         _context = context;
@@ -40,22 +49,25 @@ public class AuraSpell : MonoBehaviour
         if (_casterHealth != null)
             _casterHealth.ClearShield();
 
+        if (_visual != null)
+            Destroy(_visual);
+
         Destroy(gameObject);
     }
 
     private void BuildVisual()
     {
-        GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        visual.transform.SetParent(_context.Caster.transform, false);
-        visual.transform.localPosition = Vector3.up;
-        visual.transform.localScale = Vector3.one * 1.2f;
+        _visual = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        _visual.transform.SetParent(_context.Caster.transform, false);
+        _visual.transform.localPosition = Vector3.up;
+        _visual.transform.localScale = Vector3.one * 1.2f;
 
-        Collider col = visual.GetComponent<Collider>();
+        Collider col = _visual.GetComponent<Collider>();
         if (col != null) Destroy(col);
 
         Color color = _context.Recipe.school != null ? _context.Recipe.school.primaryColor : Color.white;
         color.a = 0.25f;
-        Renderer r = visual.GetComponent<Renderer>();
+        Renderer r = _visual.GetComponent<Renderer>();
         if (r != null)
         {
             MaterialPropertyBlock mpb = new MaterialPropertyBlock();

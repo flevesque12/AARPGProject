@@ -16,6 +16,13 @@ public class SkillCaster : MonoBehaviour
     [SerializeField] private SprintController _sprint;
     [SerializeField] private LayerMask _enemyLayer;
 
+    [Header("Visée")]
+    [Tooltip("Décalage vertical du point d'origine du projectile au-dessus du pivot du " +
+        "lanceur — voir SpellCaster._castHeightOffset (bug fix 2026-08-06), même cause : le " +
+        "pivot du joueur est déjà à hauteur de poitrine, +1 unité complète envoyait le " +
+        "projectile au-dessus de la tête des cibles.")]
+    [SerializeField] private float _castHeightOffset = 0.3f;
+
     private float[] _cooldowns;
 
     // (slotIndex, cooldownRemaining, cooldownTotal) — pour l'UI future
@@ -97,7 +104,7 @@ public class SkillCaster : MonoBehaviour
 
     private IEnumerator CastProjectile(SkillData skill, Vector3 target)
     {
-        Vector3 spawnPos = transform.position + Vector3.up;
+        Vector3 spawnPos = transform.position + Vector3.up * _castHeightOffset;
         Vector3 dir = target - spawnPos;
         dir.y = 0f;
         if (dir.sqrMagnitude < 0.001f) dir = transform.forward;

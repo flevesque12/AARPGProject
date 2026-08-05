@@ -557,5 +557,13 @@ public class CraftingPanel : MonoBehaviour
         _feedbackText.alignment = TextAnchor.MiddleCenter;
         _feedbackText.color = new Color(1f, 0.9f, 0.4f);
         _feedbackText.text = "";
+        // Bug fix (2026-08-06): Text defaults to raycastTarget=true, and this label (600x30,
+        // horizontally centered) spans wide enough to sit directly on top of every rune node's
+        // bottom half AND its intensity slider (built earlier in BuildUI, so this renders/
+        // raycasts on top of them as a later sibling) — silently swallowing clicks meant for
+        // the runes. Form/School nodes sit far enough left/right to clear this label's width,
+        // which is why only the purple rune nodes were affected. This label only ever displays
+        // text, never needs to receive clicks itself.
+        _feedbackText.raycastTarget = false;
     }
 }

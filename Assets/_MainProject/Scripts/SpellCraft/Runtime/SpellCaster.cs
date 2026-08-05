@@ -20,6 +20,14 @@ public class SpellCaster : MonoBehaviour
     [SerializeField] private SprintController _sprint;
     [SerializeField] private LayerMask _enemyLayer;
 
+    [Header("Visée")]
+    [Tooltip("Décalage vertical du point d'origine au-dessus du pivot du lanceur. Le pivot du " +
+        "joueur (CharacterController.center = 0) est déjà à hauteur de poitrine (~1.06), donc " +
+        "un décalage complet de 1 unité envoyait le Projectile au-dessus de la tête de toutes " +
+        "les cibles (bug fix 2026-08-06 — un projectile qui traverse une cible sans la toucher " +
+        "volait en fait par-dessus, invisible à l'oeil sur cette trajectoire quasi-horizontale).")]
+    [SerializeField] private float _castHeightOffset = 0.3f;
+
     private float[] _cooldowns;
 
     // (slotIndex, cooldownRemaining, cooldownTotal) — pour l'UI future
@@ -101,7 +109,7 @@ public class SpellCaster : MonoBehaviour
     // sont centrés sur le point visé ; Aura part du joueur (son visuel suit le caster).
     private (Vector3 origin, Vector3 direction) ComputeCastGeometry(SpellRecipe recipe)
     {
-        Vector3 spawnPos = transform.position + Vector3.up;
+        Vector3 spawnPos = transform.position + Vector3.up * _castHeightOffset;
         float maxRange = recipe.baseForm.range > 0f ? recipe.baseForm.range : recipe.baseForm.radius;
         Vector3 target = GetCastTarget(maxRange);
 
