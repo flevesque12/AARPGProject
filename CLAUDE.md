@@ -235,86 +235,14 @@ regardless of camera angle. The camera wrapper changes, not the movement math.
 | SprintController.cs | Player/ | Keep as-is. Possibly make sprint free (no stamina cost). |
 | DamageNumber.cs | UI/ | Keep — fully code-created via DamageNumber.Spawn(), no prefab dependency. |
 | EnemySpawner.cs | Enemy/ | Keep as-is. |
-| HeroCharacter models | Models/ | ⚠️ SUPERSEDED (2026-07-31) — Player now uses the 3rdParty/ATART Wizard model instead (see note below the table). HeroCharacter_Rigged.glb kept in the project but no longer wired to Player; still a candidate if the team wants a from-scratch (non-3rdParty) hero later. |
-| Animations | Animations/ | HeroAnimator.controller kept in the project but unused by Player (see Wizard swap note below) — never was wired to Player either, this table entry described the Phase 5/6 plan, not something completed. |
+| HeroCharacter models | Models/ | ⚠️ SUPERSEDED (2026-07-31) — Player now uses the 3rdParty/ATART Wizard model instead (`Wizard_Lit.prefab`, 4 new ToonCel materials since stock ones render pink in URP; full swap details in the `project-history` skill). HeroCharacter_Rigged.glb kept in the project but no longer wired to Player; still a candidate if the team wants a from-scratch (non-3rdParty) hero later. |
+| Animations | Animations/ | HeroAnimator.controller kept in the project but unused by Player — replaced by `Wizard.controller` (Speed blend tree + Cast/Dodge trigger states, see `project-history` skill) — never was wired to Player either, this table entry described the Phase 5/6 plan, not something completed. |
 | VFX/Ignis/ prefabs | Prefabs/VFX/ | Keep particle systems. Restyle for toon look (brighter, more stylized). |
 
-**Player visual model swap (2026-07-31)**: the placeholder `Capsule` primitive under
-`Player` (in `MovementGym.unity`) was replaced with an instance of the 3rd-party
-`Assets/3rdParty/ATART/Character/Wizard/Prefabs/Wizard_Lit.prefab` (user request — pick
-a model from `3rdParty/ATART` and use its animations). Humanoid rig, feet-at-origin
-pivot, positioned at local `(0, -1, 0)` under Player so feet land at the
-`CharacterController`'s capsule bottom. The stock Wizard materials use the Standard
-shader (Built-in RP) or a custom `Custom/UnlitShadow` shader — both render pink in
-URP — so 4 new materials were created instead (`Materials/ToonCel_WizardBody/Face/
-Hair/Weapon.mat`, shader `AARPG/ToonCel`, each just wiring the matching Wizard `.tga`
-into `_BaseMap`) — this doubles as applying the Phase 5 cel-shader to an imported
-character model for the first time (previously only on primitive demo materials).
-New `Wizard.controller` (`Animations/`) — a single `Speed` float parameter driving a
-1D blend tree (`Idle1`→0, `Walk_F`→8, `Run`→13, matching `PlayerController.moveSpeed`=8
-and `SprintController.speedMultiplier`=1.6) — assigned to the Animator that lives on
-the nested `Wizard` FBX root (`Player/WizardModel/Wizard`, not on `WizardModel` itself).
-`Animator.applyRootMotion` set to `false` — movement stays 100% owned by
-`PlayerController`'s `CharacterController.Move()`, animations never displace the
-transform. New `PlayerAnimator.cs` (`Scripts/Player/`) reads
-`PlayerController.CurrentSpeed` each frame (smoothed via `Mathf.Lerp`) and feeds it to
-the Animator — single responsibility, no other logic. `CombatVisualFeedback.
-capsuleRenderer`/`capsuleTransform` and `HitFeedback.modelRenderer` were re-pointed
-from the deleted Capsule to `Wizard_Body` (SkinnedMeshRenderer) and `WizardModel`
-(root transform) respectively — both scripts still only tint/scale a single renderer,
-so hit-flash currently only tints the body mesh, not Face/Hair/Weapon (pre-existing
-single-renderer limitation, not new, just more visible now that the model has 4
-separate renderers instead of 1 capsule). Verified via Unity MCP Play Mode (manually driving
-`PlayerController`/`PlayerAnimator`/`SprintController`'s private `Update()` via
-reflection, same frame-ticking limitation noted elsewhere in this doc): Speed param
-tracked `CurrentSpeed` exactly across Idle (0) → Walk (8) → Run (12.8, sprint
-multiplier applied). Zero console errors.
-
-**Cast animation (2026-07-31, same session, follow-up)**: `Wizard.controller` gained a
-`Cast` trigger + `CastSlot` int and 4 new states `Cast_Slot0..3`, each playing one of the
-Wizard's `Skill1-4` clips (one-shot, `Any State` → `Cast_SlotN` on `Cast` + `CastSlot==N`,
-then an exit-time transition — 0.9 through the clip — back to `Locomotion`). Slot→clip is
-a plain index mapping (slot 0-1 = SpellCaster/new pipeline, 2-3 = legacy SkillCaster), not
-tied to spell content — `SpellRecipe` has no visual/animation hint field, so this is the
-only signal available; every recipe in a given slot plays the same gesture regardless of
-its Form/School/Runes. `PlayerCombat` gained `event Action<int> OnSpellCast`, fired in
-`TryCastSlot` right after a cast actually goes through (both branches). `PlayerAnimator`
-subscribes to it (`OnEnable`/`OnDisable`) and sets `CastSlot`/`Cast` — `PlayerCombat` itself
-has no Animator reference, keeping the existing event-driven decoupling (same pattern as
-`DodgeRoll.OnDodgeStart/OnDodgeEnd` → `CombatVisualFeedback`). No movement lock added for
-the cast gesture — `PlayerCombat` never locked movement during cast even before this change,
-so the character can still strafe while the gesture plays; short one-shot clips (0.9-1.4s)
-just finish and blend back to Locomotion. Casting_In/Wait/Out, Attack1-3, Damage_*, Death
-clips are still unused — flagged as available for whenever a channeled-cast, melee, or
-death/hurt-reaction pass is wanted, not started here. Verified via Play Mode (manual
-`Animator.Update()` stepping, same limitation as above): `TryCastSlot(0)` correctly entered
-`Cast_Slot0` and auto-returned to `Locomotion` once the clip finished; `TryCastSlot(3)`
-(legacy `SkillCaster` branch) correctly entered `Cast_Slot3` — confirms `OnSpellCast` fires
-from both branches. Zero console errors.
-
-**Dodge animation (2026-07-31, same session, follow-up)**: `DodgeRoll`'s roll now plays the
-Wizard's `Teleport` clip instead of no animation at all — user's choice over the pack's
-`Sliding` clip (a physical ground-roll didn't fit a robed mage; a blink does, and reads
-better with the existing i-frame invulnerability). `DodgeRoll` gained a public
-`DodgeDuration` getter (was private-only). `Wizard.controller` gained a `Dodge` trigger, a
-`DodgeSpeedMult` float, and a `Dodge` state (`Any State` → `Dodge` on the trigger, snappy
-0.03s blend, then exit-time 0.95 back to `Locomotion`) whose **playback speed is bound to
-`DodgeSpeedMult`** (`AnimatorState.speedParameterActive`) — the `Teleport` clip is 0.867s
-but `dodgeDuration` defaults to 0.4s, so a fixed-speed clip would visibly outlast the actual
-roll. `PlayerAnimator` computes `DodgeSpeedMult = dodgeClipLength / dodgeRoll.DodgeDuration`
-(re-read every dodge, so retuning `dodgeDuration` in the Inspector keeps the animation in
-sync automatically) and fires it from a new `DodgeRoll.OnDodgeStart` subscription — same
-decoupled-event pattern as `OnSpellCast`/`CombatVisualFeedback`, `DodgeRoll` itself has no
-Animator reference. `dodgeClipLength` (0.867) is a plain serialized float on
-`PlayerAnimator`, not read from the clip at runtime — if the `Teleport` clip is ever swapped
-for a different one, that field must be updated by hand to match. The dodge's actual
-movement (`CharacterController` translation via `MoveByDelta`, smooth over `dodgeDuration`)
-was **not** changed to an instant teleport-style position jump — only the visual gesture
-changed, the underlying roll is still a slide-with-i-frames; a true instant-teleport-dodge
-(disable collision, jump position, reappear) would be a separate, bigger design decision.
-Verified via Play Mode: `DodgeSpeedMult` computed exactly `0.867/0.4 = 2.1675` on
-`TryDodge`, `Dodge` state entered, and the Animator correctly auto-returned to `Locomotion`
-once the sped-up clip finished. Zero console errors.
+Wizard model swap + cast/dodge animation wiring (2026-07-31): full implementation
+notes and Play Mode verification numbers are in the `project-history` skill —
+load it if you need to touch `Wizard.controller`, `PlayerAnimator.cs`, or the
+ToonCel Wizard materials.
 
 ### 🔄 REFACTORED (core logic preserved, interface changed)
 | Script | What changes |
@@ -359,720 +287,97 @@ once the sped-up clip finished. Zero console errors.
 
 ---
 
-## Completed Work (v3.1 phases — code exists in project)
+## Completed Work (v3.1 phases — superseded by Migration Status above)
 
-### Phase 1 ✅ — Core Movement & Game Feel
-- WASD + mouse movement via CharacterController
-- Basic enemy AI (Idle → Chase → Attack → Dead) with NavMeshAgent
-- HealthSystem (player + enemies)
-- PoE2-style camera (CameraController — to be replaced)
-- Game feel: hit stop (Time.timeScale 0.05f for 60ms), DamageNumber.Spawn()
-- AimIndicator ground reticle (to be replaced)
-
-### Phase 2 ✅ — Common Skills (Combat v3.1)
-- DodgeRoll: directional, i-frames 0.05s–0.35s, AnimationCurve movement, 25 stamina, 1.2s cooldown
-- BlockSystem: normal (60% reduction, 120° arc) + perfect (90%, slowmo 0.15f)
-- RiposteSystem: window after perfect block or dodge end, ×2 damage, 50% posture damage
-- SprintController: ×1.6 speed, 10 stamina/sec
-- StaminaSystem: shared resource, 1.5s regen delay, ×3 out-of-combat regen
-- PlayerHUD: HP bar, stamina bar (dynamic color), action bar, riposte indicator
-
-### Phase 3 ✅ — Enemy Telegraph + Posture/Stagger
-- PostureSystem: posture pool (60 basic / 120 elite), regen, stagger state, ×2.5 damage during stagger
-- PostureBarUI: world-space bar, amber fill, pulse at ≤30%, "STAGGER" text
-- EnemyTelegraph: Circle (0.3s), Cone (0.5s), FullBoss (0.8-1.2s) red indicators
-- StaggerVFX: visual effect on stagger
-- EnemyAI integration: cancel attack if staggered during windup
-
-### Phase 4 ✅ — First School Ignis
-- SkillData ScriptableObject architecture
-- SkillCaster: instantiation + casting logic
-- SkillProjectile: physics-based projectile with VFX
-- 4 active Ignis skills:
-  - Trait de Braise (basic fire projectile)
-  - Explosion Ignis (AoE burst)
-  - Mur de Feu (fire wall)
-  - Météore Ignis (heavy AoE)
-- Procedural VFX particle systems per skill
-- Skill bar HUD: slots 1-4 with cooldown overlay
-- TTK calibration: baseDamage 25, enemyDamage 17, enemyHP 100
+Phases 1-4 (core movement, common skills/combat, enemy telegraph+posture, first
+school Ignis) shipped in v3.1 and were subsequently archived/refactored per the
+Migration Status table above. Full feature lists and v3.1 tuning numbers: see the
+`project-history` skill.
 
 ---
 
 ## New Roadmap (v4.0)
 
-### Phase 5 — Core Pivot (camera + movement + cleanup)
-- [x] Install Cinemachine, create ThirdPersonCamera — **top-down, fixed angle,
-      100% game-controlled** (design changed mid-phase from the original
-      "over-the-shoulder" plan — see Player Movement section above)
-- [x] Refactor PlayerController for the new camera — `FacingMode` (Movement/Aim),
-      no camera-rotation coupling since the camera takes no player input
-- [x] Refactor GameInput (removed block/riposte input; added spell slots 1-4,
-      `OnGrimoireTogglePressed`/`OnInteractPressed` events with no consumer yet)
-- [x] Create ManaSystem (replaces StaminaSystem for casting)
-- [x] Create PlayerCombat (spell slot casting + FacingMode.Aim bridge — does
-      **not** yet own dodge, see note below)
-- [x] Archive removed scripts to _Archive/ folder — **done (2026-07-30)**:
-      CombatController/BlockSystem/RiposteSystem/PostureSystem/PostureBarUI/
-      StaggerVFX moved to `Scripts/_Archive/*.cs.txt`, components removed from
-      Player.prefab and Enemy.prefab. Rewired in the process: HealthSystem
-      (dodge i-frames checked directly via DodgeRoll, no more
-      CombatController middleman), GameInput (dodge/sprint wired straight to
-      DodgeRoll/SprintController, basic melee attack input dropped —  v4.0
-      has no melee combo), CombatVisualFeedback (gutted: sword-swing + shield
-      visuals removed, sprint/dodge visuals kept), HitFeedback (block-hit/
-      perfect/broken flashes removed), SkillCaster/SkillProjectile (posture
-      stagger-damage branch removed). **StaminaSystem intentionally NOT
-      archived** — still consumed by DodgeRoll and SprintController; removing
-      it needs the "sprint may be free" open question resolved first.
-- [x] Simplify DodgeRoll (i-frame 0.3s → 0.2s; riposte-window-on-dodge-end
-      removed — that trigger actually lived in RiposteSystem's own
-      subscription to `DodgeRoll.OnDodgeEnd`, not in DodgeRoll itself)
-- [x] Simplify EnemyAI (remove posture checks) — ElementalWeakness/hurt state
-      intentionally deferred to Phase 8, not added here
-- [x] Refactor PlayerHUD (HP + Mana + 4 spell slots)
-- [x] Basic cel-shader setup — **done (2026-07-30)**, hand-authored HLSL/
-      ShaderLab shader (`Shaders/ToonCel.shader`, `AARPG/ToonCel`) instead of
-      a Shader Graph node graph: the MCP tooling available this session can
-      only edit `.shader` text, not `.shadergraph` node JSON (user confirmed
-      hand-written HLSL over a blind/error-prone hand-edited node graph).
-      Forward + ShadowCaster passes, banded (stepped) diffuse lighting, ambient
-      floor so the shadow band never reads pure black (design pillar: never
-      dark/grim), banded specular, and a rim light for the warm toon glow.
-      Compiles clean (0 errors). Demo materials `ToonCel_Player.mat`/
-      `ToonCel_Enemy.mat` created and assigned — confirmed visually via
-      screenshot on the Player capsule (clear light/shadow band + rounded
-      specular highlight, no black shadow). **Not applied to the imported
-      Skeleton_Warrior/Synty models** — reskinning existing art assets is the
-      Phase 11 art pass, out of scope for this foundational shader setup. If
-      the team wants Shader Graph specifically (node-based, artist-editable)
-      instead of/alongside this HLSL version, that still needs to be built by
-      hand in the Unity Editor — not reachable through current MCP tools.
-- [x] Test: player can move in 3P, dodge, cast 1 basic spell, kill 1 enemy —
-      **done (2026-07-30) via Unity MCP + Play Mode**, exercising specifically
-      the code touched by this session's CombatController/PostureSystem
-      archiving: `HealthSystem.TakeDamage` on both an entity with DodgeRoll
-      (Player, normal damage confirmed) and without (Enemy, lethal hit →
-      `IsDead=true` confirmed); `DodgeRoll.TryDodge` → `IsDodging=true`
-      synchronously, correctly gating `PlayerCombat.CanAct`; full cast
-      pipeline `PlayerCombat.TryCastSlot` → `SkillCaster.TryCastSkill` →
-      mana 100→75 (Ignis_Explosion cost 25), cooldown started, FacingMode
-      switched to Aim. Zero console errors across both Play Mode sessions.
-      **Still not a live human playtest** — this MCP environment's Play Mode
-      does not tick frames between separate tool calls (confirmed again this
-      session: `Time.frameCount` stayed at 2 across multiple calls), so
-      continuous input (camera damping feel, movement smoothness, precise
-      i-frame timing) still needs a real keyboard/mouse session to validate.
+### Phase 5 — Core Pivot (camera + movement + cleanup) ✅ COMPLETE (2026-07-30)
+- [x] Cinemachine ThirdPersonCamera — top-down, fixed angle, 100% game-controlled
+- [x] PlayerController `FacingMode` (Movement/Aim), no camera-rotation coupling
+- [x] GameInput refactor (spell slots 1-4, Grimoire/Interact events)
+- [x] ManaSystem (replaces StaminaSystem for casting)
+- [x] PlayerCombat (spell slot casting + FacingMode.Aim bridge)
+- [x] Archived removed v3.1 scripts to `_Archive/` — StaminaSystem intentionally
+      kept active (still consumed by DodgeRoll/SprintController)
+- [x] Simplified DodgeRoll (i-frame 0.3s → 0.2s) and EnemyAI (posture checks removed)
+- [x] Refactored PlayerHUD (HP + Mana + 4 spell slots)
+- [x] Cel-shader (`Shaders/ToonCel.shader`, hand-written HLSL) — not yet applied
+      to imported Skeleton_Warrior/Synty models (Phase 11 art pass)
+- [x] Verified via Unity MCP Play Mode — not yet a live human playtest (standing
+      MCP-tooling limitation: frames don't tick between tool calls)
 
-**Phase 5 is functionally complete** as of 2026-07-30 — all checklist items
-done except the human feel-playtest noted above, which is a standing
-limitation of this tooling, not unfinished work.
+Full implementation notes, design-decision rationale, and verification numbers
+for each item: see the `project-history` skill.
 
-### Phase 6 — Spell Crafting Core
-- [x] SpellRecipe + RuneModifier ScriptableObjects — **done (2026-07-30)**.
-      `SpellCraft/Data/`: `SpellEnums.cs` (`SpellBaseForm`, `SpellSchool`,
-      `RuneCategory` — deliberately separate from the existing `SkillSchool`/
-      `SkillType` in `Skills/SkillData.cs`, same pattern as ManaSystem staying
-      decoupled from StaminaSystem, so archiving the v3.1 skill system later
-      needs zero changes here), `BaseFormData` (per-form baseManaCost/
-      baseCooldown), `SchoolData` (per-school display name + primary/secondary
-      color from the Schools table), `RuneModifier` (**abstract** SO base
-      implementing `ISpellModifier` — concrete runes are subclasses, not yet
-      created, that's the "4 basic modifier runes" item below), `SpellRecipe`
-      (composes BaseFormData + SchoolData + up to 4 RuneModifier, `ManaCost`/
-      `CooldownTime` computed live as `base × Π(1 + rune.multiplier)` rather
-      than cached/serialized, `OnValidate` prunes mutually-incompatible rune
-      pairs). Seed data assets created under `Data/SpellCraft/`: 4
-      `BaseFormData` (Projectile/Zone/Aura/Impact, mana costs 6-9 — mid-range
-      of the "Form only: 5-10 Mana" bracket), all 7 `SchoolData` (colors from
-      the Schools table), 1 example `SpellRecipe`
-      (`Ignis_Projectile_Base`, no runes yet since none exist).
-- [x] SpellFactory + ModifierProcessor + ISpellModifier — **done (2026-07-30)**.
-      `SpellCraft/Runtime/`: `ISpellModifier` (single `OnSpawn(SpellContext)`
-      hook — deliberately minimal, `OnHit`/`OnExpire` will be added once the
-      base forms that need them exist, not speculatively now), `SpellContext`
-      (minimal MonoBehaviour data carrier — recipe/caster/origin/direction —
-      **not** in CLAUDE.md's original target tree, added because the 4 base
-      forms need *something* common to read from; they'll attach their
-      behavior components onto the same GameObject `SpellFactory` creates
-      rather than replacing this), `ModifierProcessor` (iterates
-      `recipe.ModifierRunes` and calls `rune.OnSpawn`), `SpellFactory`
-      (instantiates the spell root GameObject + `SpellContext`, calls
-      `ModifierProcessor` — does **not** touch Mana/cooldown, that stays the
-      caller's job, same split as `SkillCaster` today). Verified end-to-end
-      via Unity MCP `execute_code` in Play Mode (Reflection.Emit-generated
-      disposable test rune, not a real content asset): baseline recipe
-      (0 runes) → ManaCost=7/CooldownTime=1 exactly matches `BaseForm_Projectile`;
-      1 rune (×0.5 mana, ×0.2 cooldown) → 10.5/1.2 exactly as the formula
-      predicts; `OnValidate` correctly nulled out an incompatible second rune;
-      `SpellFactory.CreateSpell` produced a correctly-populated `SpellContext`
-      and the test rune's `OnSpawn` fired through `ModifierProcessor`. Zero
-      console errors.
-- [x] 4 base forms functional (Projectile, Zone, Aura, Impact) — **done
-      (2026-07-30)**, all 4 in `SpellCraft/Runtime/`. `BaseFormData` gained
-      combat tuning fields (`baseDamage`, `range`, `radius`, `projectileSpeed`,
-      `projectileSize`, `duration`, `tickInterval` — same flat-fields-for-all-
-      forms convention as the v3.1 `SkillData`, since each `BaseFormData`
-      instance is form-specific so unused fields per form are harmless).
-      `SpellFactory.CreateSpell` signature gained a `LayerMask hitLayer`
-      parameter and now attaches+inits the matching base form behaviour after
-      running `ModifierProcessor`, switching on `recipe.baseForm.baseForm`.
-      No `OnHit`/`OnExpire` modifier hook yet on any form — `ISpellModifier`
-      still only exposes `OnSpawn` (see that file's comment) — so bounce/
-      homing/split/etc. wait for the "4 basic modifier runes" item below.
-      - **ProjectileSpell**: straight-line movement + manual `OverlapSphere`
-        hit detection (ported from `Skills/SkillProjectile.cs`), builds its
-        own primitive-sphere visual colored by `recipe.school.primaryColor`
-        (visual creation used to live in `SkillCaster.CastProjectile`, now
-        owned by the form behaviour itself since `SpellFactory` has no
-        caster-side coroutine to do it).
-      - **ZoneSpell**: flat cylinder visual, ticks damage via `OverlapSphere`
-        every `tickInterval` for `duration` then self-destroys (ported from
-        `SkillCaster.CastZone`/`ApplyAoE`). Note: Unity runs a coroutine's
-        body synchronously up to its first `yield` the moment `StartCoroutine`
-        is called, so the first tick fires immediately on cast, same as the
-        v3.1 original (`nextTick` starts at 0) — not a bug, tripped up an
-        early manual-tick test that double-counted this.
-      - **AuraSpell**: self-buff on the caster. Design decision (user choice,
-        2026-07-30, since no buff/resistance system existed yet): implements
-        an **absorbing shield**, not a generic resistance/buff — reuses
-        `BaseFormData.baseDamage` as the shield amount (no new field, same
-        reuse pattern as `range` serving double duty across forms). Required
-        adding shield support to `Core/HealthSystem.cs` itself:
-        `ShieldAmount` property, `AddShield`/`ClearShield` methods,
-        `OnShieldChanged` event, and `TakeDamage` now drains `ShieldAmount`
-        before touching `CurrentHealth` (same pattern as the existing
-        `DodgeRoll.IsInvulnerable` early-return check). A true generic buff/
-        resistance system (damage multipliers, movement speed, etc.) is
-        still undesigned — flag it for discussion before assuming Aura can
-        do more than shield.
-      - **ImpactSpell**: instant single-hit `OverlapSphere` damage at the
-        cast point, no travel, no persistence, brief expanding-sphere visual
-        (0.3s) then self-destroy (ported from `SkillCaster.CastAoE`/
-        `ApplyAoE`, minus the `castTime` telegraph — telegraphing is a
-        separate future concern, not in this item's scope).
-      All 4 verified individually via Unity MCP Play Mode (`execute_code`,
-      frame ticking between tool calls doesn't advance normally — same
-      limitation noted in Phase 5/6 above — so tests invoke the relevant
-      method directly instead of waiting on real frames):
-      Projectile moved and dealt exactly 30 damage (100→70 HP) to a
-      `HealthSystem` on the `Enemy` layer, correctly gated by `hitLayer` (an
-      earlier `~0` "everything" test mask hit the scene's real Player object
-      instead — confirms the layer filter is load-bearing, not decorative);
-      Zone dealt 30/tick and left an enemy at 10 HP after 3 ticks; Aura gave
-      the caster a 30-point shield that absorbed a 20-dmg hit fully (HP
-      unchanged, shield→10) then absorbed the remaining 10 on a 50-dmg hit
-      with 40 overflowing to HP (100→60); Impact hit an in-radius enemy
-      (100→70) and correctly ignored one placed outside `radius`. All 4
-      `BaseForm_*.asset` files tuned explicitly (not left on C# class
-      defaults) via `manage_scriptable_object`. Zero console errors/warnings
-      across every test.
-- [x] 3 schools playable (Ignis, Aqua, Terra) — **done (2026-07-30)**. User
-      chose a signature-effect approach (vs. visual-only) matching the GDD
-      "Combat role" table. New `SpellCraft/Runtime/SchoolEffectApplier.cs`:
-      single entry point called by `ProjectileSpell`/`ZoneSpell`/`ImpactSpell`
-      right before `TakeDamage` (not `AuraSpell` — it never targets an
-      enemy). Switches on `recipe.school.school`; Ventus/Lux/Umbra/Ferrum
-      have no case yet (no-op) until their own Phase 8 item. `SchoolData`
-      gained per-school tuning fields (burn/slow/knockback — same flat-
-      fields-for-all-schools convention as elsewhere, unused fields per
-      school are harmless).
-      - **Ignis → Burn (DoT)**: new `BurnStatus.cs`, attached to the target's
-        `HealthSystem` GameObject, ticks damage on a timer, re-`Init`
-        refreshes duration instead of stacking a second component.
-      - **Aqua → Slow**: new `SlowStatus.cs`, multiplies `NavMeshAgent.speed`
-        for a duration then restores it. Only works on entities with a
-        `NavMeshAgent` (v4.0 convention: "NavMeshAgent for enemies only") —
-        an Aqua spell hitting the player currently has no effect, since
-        `PlayerController` has no external speed hook. Flagged in-code as a
-        gap to revisit if enemies ever cast spells.
-      - **Terra → bonus damage + Knockback**: `damage *= 1 + bonusMultiplier`
-        applied inline (no status component needed, it's instantaneous), plus
-        new `Knockback.cs` which disables the target's `NavMeshAgent` for
-        0.2s while manually displacing its transform, then re-enables the
-        agent (a `NavMeshAgent` ignores manual `transform.position` writes
-        while enabled — this is the standard workaround, `EnemyAI` needs no
-        awareness of it since `SetDestination` just resumes once the agent
-        re-enables).
-      Verified via Unity MCP Play Mode against a real instantiated
-      `Enemy.prefab` (not a synthetic test object, specifically to exercise
-      the real `NavMeshAgent`/`HealthSystem` pairing) placed at the existing
-      Enemy's on-NavMesh position (-4.32, 0.88, -9.21): Ignis Impact dealt 30
-      direct damage (50→20 HP — this prefab's `maxHealth` is 50, not the 100
-      used in earlier synthetic tests) then, with `BurnStatus.TickLoop`
-      manually driven via reflection (`IEnumerator.MoveNext()` in a loop,
-      since coroutines don't advance between tool calls — same limitation
-      noted throughout Phase 5/6), 2 more ticks of 5 landed (20→10, the loop
-      exits at the exact `duration` boundary without firing a 3rd — matches
-      `ZoneSpell`'s identical tick-loop shape, not a bug). Aqua Impact
-      dropped `NavMeshAgent.speed` from 5→2.5 synchronously on cast (exactly
-      `slowMultiplier`). Terra Impact dealt 36 damage (50→14, exactly
-      30×1.2) and displaced the enemy's `transform.position` by ~0.12 units
-      with `agent.enabled=false` observed immediately after cast (Unity runs
-      a coroutine body synchronously up to its first `yield`, so only the
-      first push increment lands within the same tool call — same mechanism
-      already noted for `ZoneSpell`'s first-tick-fires-immediately behavior).
-      All 3 `School_*.asset` files tuned explicitly. Zero console
-      errors/warnings.
-- [x] 4 basic modifier runes (Bounce, Split, Persist, Expand) — **done
-      (2026-07-30)**. `SpellContext` gained typed mutable accumulators
-      (`BounceCount`, `ExtraProjectileCount`, `DurationMultiplier`,
-      `RadiusMultiplier`) populated by `RuneModifier.OnSpawn` and read by the
-      base form behaviours right after — deliberately NOT a generic
-      key-value bag or event bus, each value maps to exactly one of these 4
-      runes, kept strongly typed. New concrete `RuneModifier` subclasses in
-      `Data/`: `BounceRune.cs` (Trajectory), `SplitRune.cs` (Shape),
-      `PersistRune.cs` (Time), `ExpandRune.cs` (Shape) — each just a tuning
-      field + a one-line `OnSpawn` override.
-      - **Bounce**: `ProjectileSpell` reads `BounceCount` at Init; on hit, if
-        bounces remain, reflects `_direction` off a vector from the impact
-        point to the target (`Vector3.Reflect`, using target position as a
-        crude surface normal — no real collision normal available from
-        `OverlapSphere`) and keeps flying instead of destroying itself.
-      - **Split**: `ProjectileSpell` reads `ExtraProjectileCount` at Init and
-        spawns sibling `ProjectileSpell` GameObjects in a fan (15° step),
-        sharing the primary's `SpellContext`. Required caching
-        `SpellRecipe _recipe` instead of holding a live `SpellContext`
-        reference for anything read after Init — siblings live on separate
-        GameObjects from the primary, so if the primary is destroyed first
-        (e.g. it hits something before a sibling does), a sibling still
-        holding `_context.Recipe` would throw `MissingReferenceException`;
-        `SpellRecipe` is a ScriptableObject asset, safe to cache independent
-        of any GameObject's lifecycle. An `isPrimary` flag prevents siblings
-        from re-triggering their own split (would infinite-loop otherwise,
-        since they share the same context with `ExtraProjectileCount > 0`).
-      - **Persist**: `ZoneSpell`/`AuraSpell` multiply `form.duration` by
-        `DurationMultiplier`. No effect on Projectile/Impact (no duration to
-        extend) — not a bug, same "field irrelevant for this form" pattern
-        used throughout `BaseFormData`.
-      - **Expand**: `ZoneSpell`/`ImpactSpell` multiply `form.radius` by
-        `RadiusMultiplier`. No effect on Projectile/Aura.
-      Verified via Unity MCP Play Mode: Split produced exactly 3
-      `ProjectileSpell` instances (1 primary + 2 extra) and the correct
-      `ManaCost` (7 × 1.6 = 11.2, base × (1+0.6) rune multiplier); Bounce
-      consumed one charge on its first hit (`BounceCount` 2→1), redirected,
-      then self-expired via max-range (never needed its second charge since
-      the reflected path didn't hit anything else — confirms the bounce
-      redirect itself, not a stall); Persist doubled a Zone's effective
-      duration (3→6, radius unchanged at 2); Expand widened an Impact's hit
-      radius enough to catch an enemy placed at 2.5 units (base radius 2,
-      expanded 3) that a base-radius Impact would've missed. 4 `Rune_*.asset`
-      files created under `Data/SpellCraft/Runes/` with explicit tuning.
-      Zero console errors/warnings.
-- [x] Grimoire UI — basic crafting panel (node-graph) — **done (2026-07-30)**.
-      **Phase 6 is now fully complete.** User explicitly chose a real
-      draggable node-graph over a simpler button-picker panel (accepting the
-      extra effort/risk of tuning UI without live visual feedback in this
-      MCP environment). Scoped to crafting only — `SpellbookPanel`/
-      `RuneEncyclopedia`/`SynergyEncyclopedia`/`JournalPanel` are the
-      Phase 8 item "Full Grimoire (craft, spellbook, rune encyclopedia,
-      synergy log, journal)", not built here. New `Grimoire/` folder (first
-      files in it):
-      - `CraftingNode.cs` — generic draggable node (`IBeginDragHandler`/
-        `IDragHandler`/`IEndDragHandler`), carries a `NodeKind` (Form/School/
-        Rune) + the actual asset payload, drag position resolved via
-        `RectTransformUtility.ScreenPointToLocalPointInRectangle` against its
-        parent rect (avoids scale-drift issues a raw `eventData.delta`
-        accumulation would have). Delegates all connect/disconnect decisions
-        to `CraftingPanel.HandleNodeDropped` — the node itself holds no
-        graph-state opinion.
-      - `CraftingPanel.cs` — the graph: a central "recipe core" (shows a
-        live Mana/Cooldown/rune-count preview, recomputed via a cached
-        in-memory `SpellRecipe` instance — `ScriptableObject.CreateInstance`,
-        never written to disk), 6 ring-arranged slot positions (1 Form, 1
-        School, 4 Runes) at fixed angles around the core, and a palette of
-        draggable source nodes (left column = 4 Forms, right column = 7
-        Schools, bottom row = 4 Runes — all 4 existing `RuneModifier`
-        assets). Drop within `CoreDropRadius` (150px, checked via
-        `anchoredPosition.magnitude` since all nodes/core share the same
-        parent rect so this needs no screen-space conversion) → connects
-        (Form/School replace any existing connection of the same kind; Rune
-        fills the first empty of 4 slots, rejects a 5th with on-screen
-        feedback text). Drop outside the radius on an already-connected node
-        → disconnects it and snaps it back to its palette origin. Two
-        "Sauver → Slot 1/2" buttons call `SpellCaster.SetSlot` (new public
-        method — `_slots` had no setter before, only `GetSlot`) with a
-        freshly created `SpellRecipe` instance built from the current
-        connections.
-      - `GrimoireUI.cs` — hosts `CraftingPanel` inside a
-        `ScreenSpaceOverlay` Canvas (sortingOrder 200, above `PlayerHUD`'s
-        100) built entirely in code at runtime, same convention as
-        `PlayerHUD`/`DamageNumber` (no prefabs). Toggled by
-        `GameInput.OnGrimoireTogglePressed` (Tab) — the event has existed
-        since Phase 5 with no consumer until now. Calls
-        `PlayerController.LockMovement` while open (same API `DodgeRoll`
-        already uses for its own i-frame gating). Auto-creates an
-        `EventSystem` + `StandaloneInputModule` if the scene doesn't have
-        one yet (it didn't) — required for any uGUI drag/click interaction
-        to receive input at all.
-      Added to the Player GameObject in `MovementGym.unity` with all 4
-      `BaseFormData`, all 7 `SchoolData`, and all 4 `Rune_*.asset` wired into
-      its Inspector arrays (palette contents are **not** discovered via
-      `Resources.Load`/`AssetDatabase` — the latter is editor-only and would
-      break in a real build — so new future runes/schools need to be added
-      to this array manually until the Phase 8 "Full Grimoire" pass
-      revisits data sourcing, e.g. a `Resources` folder or an addressables
-      catalog).
-      Verified via Unity MCP Play Mode, exercising the real public API a
-      live drag would call (`CraftingPanel.HandleNodeDropped`, not a
-      simulated `PointerEventData` — dragging itself is standard uGUI event
-      plumbing already proven throughout the engine, not this session's new
-      code, so the test targets the actually-new connect/disconnect/save
-      logic instead): opening the Grimoire correctly built all 15 palette
-      nodes and locked player movement; dropping Form=Projectile,
-      School=Ignis, and runes Bounce+Split onto the core produced the exact
-      expected preview (16.8 Mana = 7 × 1.5 × 1.6, 1.3s CD = 1 × 1.15 ×
-      1.15, 2 runes); saving to slot 1 correctly populated
-      `SpellCaster.GetSlot(0)`; disconnecting the Split node (dragged past
-      the drop radius, dropped again) correctly reduced the **live preview**
-      back to 1 rune (10.5 Mana) **without retroactively changing the
-      already-saved slot 1 recipe** — confirms `SaveToSlot` snapshots
-      correctly rather than holding a live reference to panel state; closing
-      the Grimoire and casting slot 1 for real through
-      `PlayerCombat.TryCastSlot` spent exactly the saved recipe's 16.8 mana
-      and spawned 3 `ProjectileSpell` instances (1 primary + 2 from Split) —
-      a fully player-crafted spell, cast through the real gameplay path,
-      behaving correctly. Zero console errors/warnings.
-- [x] Terrain effects (fire on ground, water puddle) — **done (2026-07-30)**.
-      Scoped deliberately narrow to match this item's literal wording — just
-      the ground-marking foundation, NOT synergy detection/reaction
-      (Ignis+water=Steam etc.), which is explicitly the separate Phase 8 item
-      "Environmental synergies (10 combinations)". New `TerrainType` enum
-      (Fire/Water/Wind/Shadow/LooseEarth — the 5 schools that mark terrain
-      per the "World role" column of the Schools table; Lux/Ferrum don't get
-      a case) in `SpellEnums.cs`. New `SpellCraft/Synergies/
-      EnvironmentState.cs` (first file in this folder — matches the
-      `SpellCraft/Synergies/` location already named in the target
-      architecture tree): a **static** registry (not a MonoBehaviour
-      singleton — spells are instantiated dynamically by `SpellFactory` with
-      no Inspector reference to a central object, and the project convention
-      is "No singletons — dependency injection via Inspector," so a plain
-      static class, same precedent as `SpellFactory`/`SchoolEffectApplier`,
-      fits better than a scene singleton) tracking active terrain patches
-      (type/position/radius/expiry) with `RegisterPatch`/`HasPatchAt`, plus a
-      `TryGetTerrainType(SpellSchool)` lookup. `ZoneSpell.Init` registers a
-      patch matching its own school right when it spawns, living exactly as
-      long as the zone itself (no separate lingering-after-zone-expires
-      layer — kept simple for this pass). Only `ZoneSpell` leaves terrain
-      (Projectile/Aura/Impact don't — Zone is the one form GDD explicitly
-      frames as "terrain control," see the base forms table). Verified via
-      Unity MCP Play Mode: an Ignis Zone left a `Fire` patch detectable via
-      `HasPatchAt` at its cast position (and correctly did NOT register as
-      `Water`); an Aqua Zone (cast far enough away to avoid overlap) left a
-      `Water` patch, with a query 50 units away correctly returning false —
-      confirms the spatial radius check isn't a global flag. Zero console
-      errors/warnings. `SynergyData.cs`/`SynergyDetector.cs` (the Phase 8
-      files that will query this registry to actually trigger Steam/Mud/
-      Magma/etc.) do not exist yet — don't assume synergies fire in-game
-      from this work alone.
-- [x] 2 active spell slots — **done (2026-07-30)**. New `SpellCraft/Runtime/
-      SpellCaster.cs`: player-side orchestrator for the SpellRecipe pipeline,
-      same shape as `Skills/SkillCaster.cs` (cooldown array, mana gating,
-      `GetCastTarget` via `PlayerController.AimWorldPosition`) but driving
-      `SpellFactory.CreateSpell` instead of the legacy `SkillProjectile`
-      path. 2 slots matches the GDD's starting Savoir Magique count
-      (2→3→4, not yet wired to progression — this is just a fixed-size array
-      for now). `ComputeCastGeometry` picks origin per base form: Projectile
-      spawns at the caster and fires toward the aim point; Zone/Impact are
-      centered ON the (range/radius-clamped) aim point; Aura originates at
-      the caster.
-      **Key-binding decision (user choice, 2026-07-30)**: keys 1-2 now route
-      to `SpellCaster` (slotIndex 0-1), keys 3-4 stay on the legacy
-      `SkillCaster` (slotIndex 2-3, unchanged Ignis SkillData skills) — no
-      `GameInput.cs` change needed, `PlayerCombat.TryCastSlot` does the
-      routing internally by index. This is a coexistence measure, not the
-      final mapping — once `SkillCaster`/`SkillData` are archived (Migration
-      Status table, "EXISTING DATA ASSETS"), keys 3-4 should be freed up for
-      slots 3-4 of the Savoir Magique progression instead.
-      2 new example `SpellRecipe` assets under `Data/SpellCraft/Recipes/`:
-      `Ignis_Projectile_Base` (already existed) on key 1, new
-      `Aqua_Zone_Frost` (Zone + Aqua + Persist rune) on key 2. `SpellCaster`
-      component added to the Player GameObject in `MovementGym.unity`
-      (`_enemyLayer` = 128, matching `SkillCaster`'s existing value — layer
-      7 "Enemy"), `PlayerCombat._spellCaster` wired to it explicitly.
-      Verified via Unity MCP Play Mode calling the real
-      `PlayerCombat.TryCastSlot` entry point (not a synthetic
-      `SpellFactory.CreateSpell` call like earlier form/rune tests — this
-      one exercises the actual player-facing path end to end): key 1 spent
-      7 mana (100→93), started a 1s cooldown, spawned 1 `ProjectileSpell`;
-      key 2 spent 12.6 mana (9 base × 1.4 Persist multiplier, 93→80.4),
-      started a 2.2s cooldown (2 × 1.1), spawned 1 `ZoneSpell`; key 3
-      (legacy, unchanged) still spent 30 mana on `Ignis_MurDeFeu` — confirms
-      no regression from the `PlayerCombat` routing change. Zero console
-      errors/warnings. **Not yet a real keyboard test** — same standing
-      limitation as Phase 5 (this MCP environment doesn't tick Play Mode
-      frames between tool calls), so continuous aiming/movement feel during
-      cast is still unverified; the user can now test this live in-editor
-      since real key bindings exist.
-- [x] Refactor SkillProjectile → ProjectileSpell with modifier support —
-      **done (2026-07-30)**. Port was already done (see "4 base forms
-      functional" above); "with modifier support" is now also true: Bounce
-      and Split (see "4 basic modifier runes" above) both modify
-      `ProjectileSpell`'s behavior via `SpellContext` accumulators. Still no
-      generic `ISpellModifier.OnHit` event hook — that pattern turned out
-      unnecessary for these two runes, handled directly in
-      `ProjectileSpell.Update`/`Init` instead — so a future rune needing a
-      genuinely different per-hit hook (not expressible as a typed
-      accumulator) may still require adding one then.
+### Phase 6 — Spell Crafting Core ✅ COMPLETE (2026-07-30, corrections 2026-08-05/06)
+- [x] SpellRecipe + RuneModifier ScriptableObjects (`SpellCraft/Data/`)
+- [x] SpellFactory + ModifierProcessor + ISpellModifier (`SpellCraft/Runtime/`)
+- [x] 4 base forms functional: ProjectileSpell, ZoneSpell, AuraSpell (implements
+      an absorbing shield, not a generic buff — `HealthSystem.ShieldAmount`),
+      ImpactSpell
+- [x] 3 schools playable: Ignis→Burn (DoT), Aqua→Slow (NavMeshAgent speed; no
+      effect on the player, which has no external speed hook — enemies-only gap),
+      Terra→bonus damage+Knockback. Ventus/Lux/Umbra/Ferrum are Phase 8.
+- [x] 4 basic modifier runes: Bounce, Split, Persist, Expand — driven by typed
+      `SpellContext` accumulators, not a generic event bus
+- [x] Grimoire UI — draggable node-graph crafting panel (`Grimoire/`:
+      CraftingNode, CraftingPanel, GrimoireUI), craft-only (Spellbook/
+      Encyclopedia/Journal panels are Phase 8)
+- [x] Terrain effects — `EnvironmentState` static registry marks Fire/Water/
+      Wind/Shadow/LooseEarth patches on Zone cast (ground-marking only, no
+      synergy reactions yet — that's Phase 8)
+- [x] 2 active spell slots — keys 1-2 route to the new `SpellCaster`, keys 3-4
+      stay on the legacy `SkillCaster` as a coexistence measure until
+      SkillData is archived
+- [x] SkillProjectile → ProjectileSpell refactor, with Bounce/Split modifier support
 
-**Post-Phase-6 correction (2026-08-05)** — user felt the crafting core was
-missing depth after comparing it against other games' spell-crafting systems
-(Magic and Mayhem, Noita, Elder Scrolls spell-making altar, Divinity: Original
-Sin 2, Fable's gesture magic — discussed but not built from, except the two
-picked below). Two additions, both scoped to the smaller of two options
-presented to the user (see conversation, "continuous tuning" / "terrain
-depth" choices):
-- **Continuous rune tuning** (Elder-Scrolls-slider inspired). New
-  `SpellCraft/Data/RuneSlot.cs`: `{ RuneModifier rune; float intensity
-  (0.25–2.0, default 1.0) }`, replacing the old bare `RuneModifier[]` on
-  `SpellRecipe.modifierRunes` — intensity lives on the slot, not the shared
-  rune asset, since the same rune can be equipped at different intensities in
-  different recipes. `RuneModifier.OnSpawn` gained an `intensity` parameter
-  (`ISpellModifier` interface updated to match); `RuneModifier` itself gained
-  `EffectiveManaCostMultiplier`/`EffectiveCooldownMultiplier` (`authored ×
-  intensity`), read by `SpellRecipe.ManaCost`/`CooldownTime`. Each of the 4
-  existing runes scales its own parameter: `BounceRune`/`SplitRune` scale
-  their flat counts (`count × intensity`, rounded — so a Bounce rune dialed to
-  minimum intensity can round down to 0 bounces, a real and intended
-  consequence of the "weak/cheap" end of the dial, not a bug);
-  `PersistRune`/`ExpandRune` interpolate around their multiplier's neutral
-  point of 1 (`1 + (authoredMultiplier - 1) × intensity`) so intensity 0
-  doesn't zero out the duration/radius bonus, just shrinks it. **Intensity
-  1.0 reproduces the old fixed-rune behavior exactly** — this is a pure
-  extension, not a retune of existing content; the one existing recipe asset
-  referencing a rune directly (`Aqua_Zone_Frost.asset`, Persist) was migrated
-  to the new serialized shape (`rune: {...}, intensity: 1`) by hand-editing
-  its YAML, since Unity can't auto-migrate a field type change from object
-  array to struct array. Grimoire: `CraftingNode` gained an `Intensity`
-  property (the node itself IS the equipped slot — one node per rune, moved
-  between palette and ring rather than recreated — so intensity lives there
-  rather than in separate `CraftingPanel` state); `CraftingPanel` builds a
-  small hand-rolled slider (Background + Handle + `UnityEngine.UI.Slider`, no
-  prefab, same convention as the rest of the file) as a **child of each rune
-  node**, so it automatically follows the node during drag/connect instead of
-  needing separate repositioning logic. `_selectedRunes` is now
-  `List<RuneSlot>`; the live Mana/Cooldown preview in the core already
-  reflected `SpellRecipe.ManaCost`/`CooldownTime`, so slider drags get visible
-  feedback for free, no extra preview UI needed.
-- **Terrain patch stacking** (DOS2-surfaces inspired, deliberately small —
-  full cross-school reactions like Steam/Magma stay Phase 8's "Environmental
-  synergies," not built here). `EnvironmentState.RegisterPatch` now checks for
-  an existing overlapping patch of the same `TerrainType` before creating a
-  new one (`FindOverlapping`, refactored out of the old inline `HasPatchAt`
-  loop and reused by both); if found, it increments that patch's new
-  `Intensity` field (capped at `MaxIntensity = 3`), extends its radius/expiry
-  to the max of old/new, and returns the resulting intensity instead of
-  silently registering a second independent patch at the same spot. New
-  `GetIntensityAt` query added alongside the existing `HasPatchAt`. Single
-  concrete payoff wired so the mechanic isn't just invisible bookkeeping:
-  `ZoneSpell.Init` reads `RegisterPatch`'s return value and applies +50%
-  damage per stack beyond the first (`1 + (intensity - 1) × 0.5`) — recasting
-  an Ignis Zone onto ground it (or an earlier cast) already marked as Fire now
-  hits harder, captured once at spawn like `RadiusMultiplier`/
-  `DurationMultiplier` rather than re-queried per tick.
+**Post-Phase-6 correction (2026-08-05)**: continuous rune tuning — each equipped
+rune now carries an `intensity` (0.25–2.0, default 1.0) via `RuneSlot`, dialed
+with a Grimoire slider; `EffectiveManaCostMultiplier`/`EffectiveCooldownMultiplier`
+scale with it. **Bounce/Split round their flat counts (`count × intensity`) and
+can round down to 0 at low intensity — intended, not a bug.** Terrain patches now
+stack (`EnvironmentState`, capped at intensity 3) and a Zone cast onto its own
+already-marked terrain deals +50% damage per stack beyond the first.
 
-Verified via Unity MCP Play Mode (`execute_code`): Bounce rune cost matched
-the linear formula exactly at intensity 0.25/1.0/2.0 (7.875/10.5/14 Mana off a
-7-Mana base, intensity 1.0 exactly reproducing the pre-change fixed value);
-`OnSpawn(intensity: 0.25)` on a bounceCount-2 rune correctly produced 0
-bounces (rounds down, matches the "can go to zero" design note above); four
-same-spot `RegisterPatch(Fire, ...)` calls produced intensity 1→2→3→3
-(correctly capped), a same-spot `Water` registration correctly stayed a
-separate patch at intensity 1; two same-spot Ignis Zone casts via the real
-`SpellFactory.CreateSpell` path dealt 30 then 45 damage (exactly the designed
-×1.5). Zero console errors/warnings before or after the Play Mode session.
+**Game feel / juice pass (2026-08-05)**: `Core/HitStop.cs` (`HitStop.Trigger`)
+freezes `Time.timeScale` briefly on impact. **Applies only to ProjectileSpell and
+ImpactSpell (one discrete hit/burst) — deliberately NOT ZoneSpell, whose ticks
+repeat every `tickInterval` and would read as a near-permanent freeze.** Grimoire
+node drag/connect and open/close now tween instead of snapping instantly.
 
-**Game feel / juice pass (2026-08-05, same session, follow-up)** — user felt
-spells and the Grimoire UI lacked juice. Two scoped additions (see
-conversation, "spell juice"/"UI juice" choices):
-- **Spell juice — hit-stop + particle burst + trail.** New `Core/HitStop.cs`:
-  static `HitStop.Trigger(duration, scale)` gels `Time.timeScale` briefly then
-  restores it — this closes an actual gap in CLAUDE.md's own v3.1→v4.0
-  migration table ("Hit stop on impactful spells only"), which was never
-  implemented for the SpellCraft forms (the v3.1 precedent,
-  `PostureSystem.StaggerCoroutine`, is archived and wasn't reachable). Static
-  class + a hidden `HitStopRunner` MonoBehaviour created on first use (same
-  "static registry, no Inspector-wired singleton" reasoning as
-  `EnvironmentState`) since a coroutine needs a live GameObject to run on.
-  New `SpellCraft/Runtime/SpellImpactVFX.cs`: procedural one-shot particle
-  burst (`ParticleSystemStopAction.Destroy`, self-cleans), colored by
-  `SchoolData.primaryColor`, generic across all 7 schools rather than reusing
-  the Ignis-only VFX prefabs — shader resolved with a fallback chain (URP
-  Particles/Unlit → URP Unlit → Sprites/Default) to never render pink like
-  the Wizard's Standard-shader materials did before their replacement.
-  **Hit-stop applies only to genuinely discrete impacts** — `ProjectileSpell`
-  (one trigger per hit, before bounce/destroy) and `ImpactSpell` (one trigger
-  for the whole AoE burst, not per target hit, so hitting 3 enemies doesn't
-  freeze time 3 times) — deliberately **not** `ZoneSpell`, whose ticks repeat
-  every `tickInterval` for the whole duration; freezing time on every tick
-  would read as a near-permanent freeze rather than a punchy impact. Zone
-  ticks get the particle burst (visual "this tick landed" feedback) without
-  the hit-stop. `ProjectileSpell` also gained a `TrailRenderer` (the only
-  form that travels) with a color-to-transparent gradient. Verified via
-  Unity MCP Play Mode: `HitStop.Trigger` measurably dropped `Time.timeScale`
-  to the requested value and a manually-driven `Freeze` coroutine restored it
-  to 1; a real Projectile-vs-Enemy hit (through `SpellFactory.CreateSpell`,
-  reflection-stepped `Update()`) dealt damage, spawned a `TrailRenderer`, and
-  left `Time.timeScale` at 0.05 immediately after; an Impact hit did the
-  same; a manually-invoked Zone `ApplyTick` dealt damage but left
-  `Time.timeScale` at 1 (confirms the exclusion is real, not accidental).
-  **Bug caught and fixed during this verification**: `SpellImpactVFX.Spawn`
-  originally configured `ParticleSystem.main` (duration, emission, shape)
-  *after* `AddComponent<ParticleSystem>()` on an already-active GameObject —
-  `playOnAwake` defaults to true, so the system started playing via
-  `OnEnable` before configuration finished, logging a real Unity warning
-  ("Setting the duration while system is still playing is not supported") on
-  every single burst. Fixed by creating the GameObject inactive, configuring
-  the fully-idle `ParticleSystem`, then activating and calling `Play()` —
-  confirmed zero console output after the fix, across both a standalone burst
-  test and the full Projectile-hit pipeline.
-- **Grimoire UI juice — motion + color.** `CraftingNode` gained
-  `AnimateTo`/`AnimateToOrigin` (ease-out cubic tween + a brief scale-punch on
-  arrival when connecting, no punch when just returning to the palette),
-  replacing every instant `anchoredPosition` snap in `CraftingPanel`'s
-  Connect/Disconnect paths. Connector lines (`AnimateLineGrow`, replacing the
-  old instant `SetLine`) now grow from the core outward instead of appearing
-  at full length — the centered-pivot rect math already in place made this a
-  matter of scaling `sizeDelta`/`anchoredPosition` by the same eased `t` used
-  for the node tween, not a rewrite. The core panel's background now
-  animates toward the selected school's color (`Color.Lerp` at 50% so white
-  text stays legible), read back to neutral gray on school disconnect —
-  matches the GDD's "Toon Fantasy, colorful, warm" pillar instead of staying
-  permanently flat gray. `GrimoireUI` gained a `CanvasGroup` + a fade/scale
-  open-close animation (`AnimateOpenClose`, ease-out opening / ease-in
-  closing, driven by `Time.unscaledDeltaTime` so it isn't affected by an
-  in-progress `HitStop` freeze) replacing the instant `SetActive` toggle —
-  the canvas now stays active through the closing animation and only
-  deactivates once faded out. Verified via Unity MCP Play Mode (reflection-
-  invoked private `Toggle`/`AnimateOpenClose`/node-drop paths, plus a
-  screenshot): opening reached the correct final alpha/scale with no
-  exceptions; connecting a Form + School node produced no exceptions and the
-  screenshot confirmed the core panel visibly tinted to Ignis's orange, the
-  connector lines mid-grow at a partial (not full, not zero) length —
-  confirming the tween is genuinely progressive across frames, not an
-  instant jump dressed up as one — and the rune palette's new intensity
-  sliders rendering under each rune node. **Not a real-time playtest** — same
-  standing MCP-environment limitation noted throughout this project (frames
-  don't tick normally between tool calls, so exact animation *feel*/timing
-  is unverified); the user can now judge the actual motion live in-editor.
-  Zero console errors/warnings throughout.
+**Test props (2026-08-05)**: 6 passive, high-HP (500, non-despawning) target
+dummies added to `MovementGym.unity` for spell testing — 3 at 4/10/18m range, a
+3-dummy AoE cluster.
 
-**Test props (2026-08-05, same session, follow-up)** — user asked for gym props to test
-spells crafted in the Grimoire. Added 6 target dummies to `MovementGym.unity` (duplicates of
-the existing `Enemy`, so they carry the correct mesh/material/collider/layer setup): 3 in a
-line in front of the player spawn (`TestDummy_Near`/`Mid`/`Far` at 4/10/18m, for
-Projectile-range and Impact/Aura-range testing) and a 3-dummy triangular cluster
-(`TestDummy_Cluster_A/B/C`, ~3m spacing, off to the side) for AoE/Split/Bounce/terrain-stacking
-testing. Each had `EnemyAI`/`EnemyTelegraph` removed (passive — won't chase or attack,
-shouldn't interrupt controlled testing) but **kept `NavMeshAgent`** so Aqua's slow and Terra's
-knockback effects stay visibly testable; `HealthSystem` retuned to 500 HP / 15 regen-per-sec /
-`destroyOnDeath = false` so they're a reusable punching bag rather than something that dies and
-despawns mid-test-session. Verified via Unity MCP Play Mode: all 6 report `onNavMesh=True`,
-spawn at full HP, and a real cast through `SpellFactory` dealt damage correctly. Scene saved.
+**4 bug fixes (2026-08-05/06)** — root causes worth knowing before touching the
+related code:
+- **Camera drift**: `ThirdPersonCamera` must write `transform.rotation` directly
+  in `LateUpdate` to the fixed `Quaternion.Euler(pitchAngle, yawAngle, 0)`. Do
+  NOT add a `CinemachineRotationComposer` — it continuously re-aims to keep its
+  LookAt target centered, which drifted the camera ~10° yaw / ~3° pitch off the
+  fixed angle and desynced mouse-raycast spell aim from what was on screen.
+- **Projectile spawn height**: cast origin uses `_castHeightOffset`
+  (`SpellCaster`/`SkillCaster`, default 0.3, `Vector3.up * _castHeightOffset`) —
+  never hardcode `Vector3.up`. `Player`'s `CharacterController.center = (0,0,0)`
+  means `transform.position` is already chest-height, not feet-level, so a full
+  extra unit sent every flat-trajectory projectile above every target's head.
+- **Aura shield visual**: `AuraSpell` must `Destroy()` both its tracking
+  GameObject AND the `_visual` shield sphere (parented separately, under the
+  caster, so it visually follows the player) — destroying only one leaves an
+  orphaned bubble.
+- **Grimoire rune click-through**: `CraftingPanel`'s feedback label must have
+  `raycastTarget = false` — being built last in `BuildUI()`, it was rendering
+  (and intercepting clicks) on top of the rune nodes/sliders beneath it.
 
-**Bug fix — camera rotation drift breaking spell aim direction (2026-08-05, same session,
-follow-up)** — user reported that cast spells didn't travel toward the mouse cursor, and
-asked to "fix the camera in place". Root cause, confirmed by directly inspecting Cinemachine's
-internal camera state via Unity MCP (`CinemachineCamera.InternalUpdateCameraState`, bypassing
-the Brain to isolate Body vs Aim behavior): `ThirdPersonCamera` had both `CinemachineFollow`
-(Body stage, position-only, `WorldSpace` binding — confirmed via this same test that Body
-*never* writes rotation, at all, under any condition) **and** `CinemachineRotationComposer`
-(Aim stage). Aim always overrides Body's rotation output, and a Rotation Composer's entire job
-is to continuously re-aim the camera to keep its LookAt target centered in frame — the exact
-opposite of "fixed angle, translate only" (the design intent documented in this file's own
-Player Movement section). Since the camera's position lags the player via damping
-(`positionDamping = 0.8`), the target is never exactly where the Composer expects it, so it
-kept nudging rotation frame to frame: measured **~10° yaw drift + ~3° pitch drift from a
-single moderate player displacement** in testing (player moved to (20, 5), camera rotation
-went from (47.22, 0, 0) to (44.73, 10.78, 0) with the Composer active). That drift is exactly
-what broke spell aim: `PlayerController.UpdateAimWorldPosition`'s mouse raycast
-(`Camera.main.ScreenPointToRay`) resolves a world direction from the camera's **current**
-rotation — a camera that's silently rotated away from its intended fixed angle desyncs "where
-the cursor looks on screen" from "what direction that raycast actually produces". Fix: removed
-`CinemachineRotationComposer` (component deleted from the `ThirdPersonCamera` GameObject in
-`MovementGym.unity`, `[RequireComponent]` attribute removed from the script) and replaced its
-job with `ThirdPersonCamera` writing its own `transform.rotation` directly to the constant
-`Quaternion.Euler(pitchAngle, yawAngle, 0)` in `LateUpdate` every frame — confirmed via the
-same `InternalUpdateCameraState`-driven test that this produces **zero rotation drift** across
-large simulated player displacements (including a (-18, 22) teleport). Also removed the now-
-dead `lookAtHeightOffset`/`rotationDamping` fields (only ever consumed by the removed
-Composer). End-to-end verification through the real gameplay path (not just the isolated
-camera test): `PlayerCombat.TryCastSlot` → `SpellCaster.TryCastSpell` →
-`SpellFactory.CreateSpell` produced a `ProjectileSpell` whose actual travel direction matched
-`PlayerController.AimWorldPosition` exactly (`Vector3.Dot` = 1, and `AimWorldPosition` itself
-was now bit-identical across repeated frames at a fixed mouse/camera state — previously it
-could jitter as the camera rotation drifted even with a static cursor). Zero console
-errors/warnings. Scene saved.
-
-**Bug fix — Projectile spells fly over the target's head (2026-08-06)** — user reported
-projectiles visibly passing through/over targets without dealing damage. Root cause: both
-`SpellCaster.ComputeCastGeometry` (v4.0) and the legacy `Skills/SkillCaster.CastProjectile`
-(v3.1) spawn the projectile at `transform.position + Vector3.up` — a **full extra unit**
-above the caster's own pivot. But `Player`'s `CharacterController.center = (0,0,0)`, meaning
-`transform.position.y` (1.062) is already the *vertical center* of the player's own 2-unit
-capsule (confirmed via the CharacterController component: `bounds.center.y = 1.062` exactly
-matches `transform.position.y`) — i.e. already roughly chest height, not feet-level like a
-more typical CharacterController setup. Adding another full unit on top put every Projectile's
-spawn (and therefore its entire flat, non-arcing flight path — direction.y is always forced to
-0) at y≈2.06, at or above head height. Target dummies (Enemy duplicates, scale 0.8) have a
-CapsuleCollider top at y≈1.84 — so every Projectile flew in a dead-straight line comfortably
-above every target's collider, 100% of the time, regardless of range or framerate (not an
-intermittent tunneling issue — this was `OverlapSphere` correctly finding nothing, because
-there was genuinely nothing there to find at that height). This is also why none of the
-Phase 6 verification passes ever caught it: every one of those tests hand-constructed a
-`SpellFactory.CreateSpell` origin already at the target's height, bypassing
-`ComputeCastGeometry`/`CastProjectile` entirely — the real player-facing cast path was never
-actually exercised end-to-end with the *default* origin logic until now.
-Fix: added a tunable `[SerializeField] private float _castHeightOffset = 0.3f` to both
-`SpellCaster` and `SkillCaster` (no magic numbers, per convention), replacing the hardcoded
-`Vector3.up` with `Vector3.up * _castHeightOffset` — puts the spawn at y≈1.36, comfortably
-inside every current target's collider range (0.03–1.84) with margin on both sides. Verified
-via Unity MCP Play Mode with a direct before/after comparison at the exact same target
-(`TestDummy_Near`, 4m away, well within the recipe's 8-unit range): the old `Vector3.up * 1.0`
-offset produced a spawn at y=2.06 and a confirmed miss (target HP unchanged, 500→500); the new
-`× 0.3` offset produced a spawn at y=1.36 and a confirmed hit (500→470, the expected 30
-Ignis-Projectile damage) — same recipe, same target, same distance, only the height changed.
-Zero console errors/warnings.
-
-**Bug fix — Aura shield visual never disappears (2026-08-06, same session, follow-up)** —
-user reported the Aura's shield bubble looks always-active with no timer. Root cause:
-`AuraSpell.BuildVisual()` deliberately parents its shield-bubble sphere to `context.Caster`
-(the player), not to the `AuraSpell`'s own tracking GameObject, specifically so the bubble
-visually follows the player around while active. But `ExpireAfter`'s cleanup only ever called
-`Destroy(gameObject)` — destroying the (invisible) tracking object, never the visual that
-actually lives under the player. The shield *mechanic* was never broken: `HealthSystem.
-ShieldAmount` correctly hit 0 via `ClearShield()` on schedule (confirmed directly:
-`shield after cast=30` → `shield=0` after driving `ExpireAfter` to completion) — only the
-leftover sphere was never cleaned up, so every cast left the player with one more permanent
-orphaned bubble as a child object (confirmed: player `childCount` went 4→5 on cast and *stayed
-at 5* after the shield itself had already expired). Fix: `AuraSpell` now stores the visual in
-a `_visual` field and calls `Destroy(_visual)` alongside `Destroy(gameObject)` in
-`ExpireAfter`. Verified via Unity MCP: after the fix, `Destroy(_visual)` targets the same
-`Sphere` object confirmed correctly parented and referenced — manually forcing an immediate
-destroy on that exact reference (working around this environment's inability to let a real
-frame pass for Unity's normal deferred `Destroy()` to take effect) brought `childCount` back
-down from 5 to 4, proving the reference and cleanup logic are correct; the live game will see
-this happen automatically at the next real frame. Zero console errors/warnings.
-
-**Bug fix — purple rune nodes hard to click/drag in the Grimoire (2026-08-06, same session,
-follow-up)** — user reported the rune modifier nodes specifically (not Form/School) were hard
-to click and drag. Root cause, found by comparing exact world-space rects of every relevant UI
-element via Unity MCP (`RectTransform.GetWorldCorners`): `CraftingPanel.BuildFeedbackText()`
-runs *last* in `BuildUI()`, so its 600px-wide, horizontally-centered "Feedback" label renders
-(and raycasts) on top of every earlier sibling it overlaps. Measured rects showed the
-Feedback label spanning world X=[293.5, 893.5] — which fully contains all 4 rune sliders'
-X-range (378.5–808.5) and overlaps the bottom half of every rune node's own Y-range (label
-Y=[11,41] vs. node Y=[21,61]). Since `UnityEngine.UI.Text` defaults to `raycastTarget = true`,
-this invisible-background label was silently swallowing clicks meant for the bottom half of
-every rune node and 100% of every intensity slider underneath it. Form nodes (world X≈173.5)
-and School nodes (world X≈1013.5) sit safely outside the label's span, which is exactly why
-only the purple runes were affected — first hard evidence ruling out the newly-added intensity
-slider itself as the cause (its own geometry was independently confirmed non-overlapping with
-its parent node, node Y=[21,61] vs. slider Y=[7,19], a clean 2-unit gap — the slider addition
-was not the bug, this pre-existing label was). Fix: `_feedbackText.raycastTarget = false` — it
-only ever displays status text, never needed to receive clicks. Verified via Unity MCP:
-confirmed `false` post-rebuild; no further geometry changes were needed since the root cause
-was fully explained by this one property. Zero console errors/warnings.
+Full implementation notes, design rationale, and Play Mode verification numbers
+for every item above: see the `project-history` skill.
 
 ### Phase 7 — Village Hub + First Library
 - [ ] Havrevent village layout, 4-5 NPCs with dialogue
